@@ -1,0 +1,2899 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>WOD CLASS</title>
+<script type="module">
+// ── Firebase 초기화 ──
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, getDocs, deleteDoc, doc, setDoc, getDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCDRFPtrlgmJ3L_c0614TPeHFv7pCabl9A",
+  authDomain: "wolchon-wod.firebaseapp.com",
+  projectId: "wolchon-wod",
+  storageBucket: "wolchon-wod.firebasestorage.app",
+  messagingSenderId: "568957870308",
+  appId: "1:568957870308:web:b3e5802cc3226223e38cf1",
+  measurementId: "G-RK1QYGQH6L"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// ── 오프라인 지속성 활성화 ──
+// 오프라인에서 저장한 데이터가 인터넷 연결되면 자동으로 Firebase에 업로드됨
+enableIndexedDbPersistence(db).catch(err => {
+  if(err.code === 'failed-precondition') {
+    console.warn('오프라인 저장: 여러 탭이 열려있으면 한 탭에서만 작동합니다');
+  } else if(err.code === 'unimplemented') {
+    console.warn('이 브라우저는 오프라인 저장을 지원하지 않습니다');
+  }
+});
+
+window._db = db;
+window._fbReady = true;
+
+// ── Firestore 동기화 함수 ──
+
+// 기록 저장 (로컬 + Firestore)
+window.fbSaveRecord = async function(rec) {
+  try {
+    await setDoc(doc(db, 'records', rec.id), rec);
+  } catch(e) {
+    console.warn('Firestore 저장 실패 (오프라인 저장됨):', e);
+  }
+};
+
+// 체력측정 기록 저장 (오프라인 동기화용)
+window.fbSaveExamRecord = async function(rec) {
+  if(!window._fbReady || !window._db) return false;
+  try {
+    await setDoc(doc(db, 'exam_records', rec.id), rec);
+    return true;
+  } catch(e) {
+    console.warn('체력측정 기록 동기화 실패:', e);
+    return false;
+  }
+};
+
+// 기록 삭제
+window.fbDeleteRecord = async function(id) {
+  try {
+    await deleteDoc(doc(db, 'records', id));
+  } catch(e) {
+    console.warn('Firestore 삭제 실패:', e);
+  }
+};
+
+// 체력측정 기록 삭제
+window.fbDeleteExamRecord = async function(id) {
+  try {
+    await deleteDoc(doc(db, 'exam_records', id));
+  } catch(e) {
+    console.warn('체력측정 기록 삭제 실패:', e);
+  }
+};
+
+// 교사 계정 저장
+window.fbSaveTeacher = async function(teacher) {
+  try {
+    await setDoc(doc(db, 'teachers', teacher.id), teacher);
+  } catch(e) {
+    console.warn('Firestore 교사 저장 실패:', e);
+  }
+};
+
+// WOD 저장
+window.fbSaveWod = async function(tid, wod) {
+  try {
+    await setDoc(doc(db, 'wods', tid), wod);
+  } catch(e) {
+    console.warn('Firestore WOD 저장 실패:', e);
+  }
+};
+
+// WOD 목록 즉시 불러오기
+window.fbLoadWodList = async function(tid) {
+  try {
+    const sid=(window._S?.selectedSchoolId||'wolchon');
+    const sKey=k=>sid+'_'+k;
+    const snap = await getDoc(doc(db, 'wod_lists', tid));
+    if(snap.exists()) {
+      const fbList = snap.data().list||[];
+      if(fbList.length > 0) stor.set(sKey('wod_list_'+tid), fbList);
+    }
+    const snap2 = await getDoc(doc(db, 'wod_active_ids', tid));
+    if(snap2.exists()) {
+      const fbIds = snap2.data().ids||[];
+      if(fbIds.length > 0) stor.set(sKey('wod_active_'+tid), fbIds);
+    }
+  } catch(e) {
+    console.warn('WOD 목록 로드 실패 (로컬 데이터 사용):', e);
+  }
+};
+
+// WOD 목록 저장
+window.fbSaveWodList = async function(tid, list) {
+  try {
+    await setDoc(doc(db, 'wod_lists', tid), { list });
+  } catch(e) {
+    console.warn('Firestore WOD 목록 저장 실패:', e);
+    throw e;
+  }
+};
+
+// WOD 공개 목록 저장
+window.fbSaveActiveWodIds = async function(tid, ids) {
+  try {
+    await setDoc(doc(db, 'wod_active_ids', tid), { ids });
+  } catch(e) {
+    console.warn('Firestore WOD 공개 저장 실패:', e);
+  }
+};
+
+// 담당 반 저장
+window.fbSaveClasses = async function(tid, classes) {
+  try {
+    await setDoc(doc(db, 'teacher_classes', tid), { classes });
+  } catch(e) {
+    console.warn('Firestore 담당 반 저장 실패:', e);
+  }
+};
+
+// 앱 시작 시 Firestore에서 전체 데이터 불러오기
+window.fbLoadAll = async function() {
+  try {
+    // 기록 불러오기
+    const recSnap = await getDocs(collection(db, 'records'));
+    const fbRecs = [];
+    recSnap.forEach(d => fbRecs.push(d.data()));
+
+    // 교사 계정 불러오기
+    const teacherSnap = await getDocs(collection(db, 'teachers'));
+    const fbTeachers = [];
+    teacherSnap.forEach(d => fbTeachers.push(d.data()));
+
+    // WOD 불러오기
+    const wodSnap = await getDocs(collection(db, 'wods'));
+    const wodMap = {};
+    wodSnap.forEach(d => { wodMap[d.id] = d.data(); });
+
+    // 담당 반 불러오기
+    const classSnap = await getDocs(collection(db, 'teacher_classes'));
+    const classMap = {};
+    classSnap.forEach(d => { classMap[d.id] = d.data().classes; });
+
+    // WOD 목록 불러오기
+    const wodListSnap = await getDocs(collection(db, 'wod_lists'));
+    const wodListMap = {};
+    wodListSnap.forEach(d => { wodListMap[d.id] = d.data().list || []; });
+
+    // WOD 공개 목록 불러오기
+    const wodActiveSnap = await getDocs(collection(db, 'wod_active_ids'));
+    const wodActiveMap = {};
+    wodActiveSnap.forEach(d => { wodActiveMap[d.id] = d.data().ids || []; });
+
+    // 로컬과 병합 (Firestore 우선, 로컬에만 있는 것도 유지)
+    const stor = window._stor;
+
+    const schoolId = (window._S?.selectedSchoolId||'wolchon');
+    const sKey = k => schoolId+'_'+k;
+
+    // 로컬 저장
+    const recKey = sKey('wod_records');
+    const localRecs2 = stor.get(recKey, []);
+    const localIds2 = new Set(fbRecs.map(r => r.id));
+    const merged2 = [...fbRecs];
+    localRecs2.forEach(r => { if(!localIds2.has(r.id)) merged2.push(r); });
+    stor.set(recKey, merged2);
+
+    // 교사 계정 병합 (학교별)
+    if(fbTeachers.length > 0) {
+      const tKey = 'teacher_accounts_'+schoolId;
+      const localTeachers = stor.get(tKey, []);
+      const fbIds = new Set(fbTeachers.map(t => t.id));
+      const mergedTeachers = [...fbTeachers];
+      localTeachers.forEach(t => { if(!fbIds.has(t.id)) mergedTeachers.push(t); });
+      stor.set(tKey, mergedTeachers);
+    }
+
+    // WOD 병합 (학교별)
+    if(Object.keys(wodMap).length > 0) {
+      const localWods = stor.get(sKey('wod_current_by_teacher'), {});
+      const merged = { ...localWods, ...wodMap };
+      stor.set(sKey('wod_current_by_teacher'), merged);
+    }
+
+    // 담당 반 병합 (학교별)
+    if(Object.keys(classMap).length > 0) {
+      const localClasses = stor.get(sKey('teacher_classes'), {});
+      const mergedClasses = { ...localClasses, ...classMap };
+      stor.set(sKey('teacher_classes'), mergedClasses);
+    }
+
+    // WOD 목록 병합 (학교별)
+    if(Object.keys(wodListMap).length > 0) {
+      Object.entries(wodListMap).forEach(([tid, list]) => {
+        const localList = stor.get(sKey('wod_list_'+tid), []);
+        const localIds = new Set(localList.map(w => w.id));
+        const merged = [...list];
+        localList.forEach(w => { if(!localIds.has(w.id)) merged.push(w); });
+        stor.set(sKey('wod_list_'+tid), merged);
+      });
+    }
+
+    // WOD 공개 목록 병합 (학교별)
+    if(Object.keys(wodActiveMap).length > 0) {
+      Object.entries(wodActiveMap).forEach(([tid, ids]) => {
+        stor.set(sKey('wod_active_'+tid), ids);
+      });
+    }
+
+    // 체력측정 기록 불러오기 (Firebase → 로컬 병합, 학교별)
+    const examSnap = await getDocs(collection(db, 'exam_records'));
+    const fbExamRecs = [];
+    examSnap.forEach(d => fbExamRecs.push(d.data()));
+    if(fbExamRecs.length > 0) {
+      const examStorKey = sKey('exam_records_2학년');
+      const localExam = stor.get(examStorKey, []);
+      const fbExamIds = new Set(fbExamRecs.map(r => r.id));
+      const mergedExam = fbExamRecs.map(r => ({...r, synced:true}));
+      localExam.forEach(r => { if(!fbExamIds.has(r.id)) mergedExam.push(r); });
+      stor.set(examStorKey, mergedExam);
+    }
+
+    console.log('✅ Firestore 동기화 완료');
+
+    // 상태 새로고침 - 현재 화면 다시 그리기
+    if(window._render) {
+      if(window._S) {
+        const rKey=(window._S.selectedSchoolId||'wolchon')+'_wod_records';
+        window._S.records = stor.get(rKey, []);
+      }
+      window._render();
+    } else if(typeof render === 'function') {
+      render();
+    }
+  } catch(e) {
+    console.warn('Firestore 불러오기 실패 (오프라인 모드):', e);
+  }
+};
+
+// 페이지 로드 시 Firebase에서 최신 데이터 불러온 후 화면 갱신
+window.addEventListener('load', async () => {
+  try {
+    await window.fbLoadAll();
+  } catch(e) {
+    console.warn('초기 로드 실패, 로컬 데이터로 시작:', e);
+  }
+});
+
+// 온라인 복귀 시 자동 동기화
+window.addEventListener('online', () => {
+  console.log('🌐 온라인 복귀 - 동기화 시작');
+  window.fbLoadAll && window.fbLoadAll();
+
+  // 체력측정 미동기화 기록 자동 업로드
+  if(window.fbSaveExamRecord && window._stor) {
+    const examStorKey=(window._S?.selectedSchoolId||'wolchon')+'_exam_records_2학년';
+    const recs = window._stor.get(examStorKey, []);
+    const unsynced = recs.filter(r => !r.synced);
+    if(unsynced.length > 0) {
+      console.log(`📤 체력측정 미동기화 ${unsynced.length}건 자동 업로드 시작`);
+      (async () => {
+        let success = 0;
+        for(const r of recs) {
+          if(!r.synced) {
+            const ok = await window.fbSaveExamRecord(r);
+            if(ok) { r.synced = true; success++; }
+          }
+        }
+        if(success > 0) {
+          window._stor.set(examStorKey, recs);
+          console.log(`✅ 체력측정 ${success}건 자동 동기화 완료`);
+          if(window._render) window._render();
+        }
+      })();
+    }
+  }
+});
+</script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@300;400;500;700;900&family=Nunito:wght@700;800;900&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#f0f4ff;--card:#ffffff;--card2:#f7f9ff;
+  --accent:#6366f1;--asoft:#6366f115;
+  --green:#10b981;--blue:#3b82f6;--red:#f43f5e;--yellow:#f59e0b;
+  --text:#1e1b4b;--muted:#6b7280;--border:#e5e7eb;--gold:#f59e0b;
+  --purple:#8b5cf6;--pink:#ec4899;--teal:#14b8a6;
+}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;min-height:100vh}
+#root{max-width:430px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+button{cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:transform .12s,box-shadow .12s}
+button:active{transform:scale(.95)}
+input{font-family:'Noto Sans KR',sans-serif}
+.tf{font-family:'Black Han Sans',sans-serif}
+.btn-p{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:16px;font-size:16px;font-weight:700;padding:14px;width:100%;box-shadow:0 4px 14px #6366f140}
+.btn-p:disabled{opacity:.4;box-shadow:none}
+.btn-s{background:#fff;color:var(--text);border:2px solid var(--border);border-radius:16px;font-size:14px;font-weight:600;padding:12px;width:100%;box-shadow:0 2px 8px #00000010}
+.btn-g{background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:16px;font-size:15px;font-weight:700;padding:13px;width:100%;box-shadow:0 4px 14px #10b98140}
+.btn-g:disabled{opacity:.4;box-shadow:none}
+.btn-d{background:linear-gradient(135deg,#f43f5e,#e11d48);color:#fff;border:none;border-radius:16px;font-size:14px;font-weight:700;padding:12px;width:100%;box-shadow:0 4px 14px #f43f5e30}
+.btn-b{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;border-radius:16px;font-size:15px;font-weight:700;padding:13px;width:100%;box-shadow:0 4px 14px #3b82f640}
+.card{background:var(--card);border-radius:20px;padding:16px;border:1px solid var(--border);box-shadow:0 2px 12px #00000008}
+.inp{background:#f7f9ff;border:2px solid var(--border);border-radius:14px;color:var(--text);font-size:15px;padding:12px 14px;width:100%;outline:none;transition:border-color .2s,box-shadow .2s}
+.inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px #6366f115}
+.chip{background:#fff;border:2px solid var(--border);border-radius:14px;padding:8px 6px;font-size:13px;font-weight:600;color:var(--muted);transition:all .15s;text-align:center;cursor:pointer;width:100%;box-shadow:0 1px 4px #00000008}
+.chip.on{border-color:var(--accent);color:var(--accent);background:#6366f112;box-shadow:0 2px 8px #6366f125}
+.badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
+.bo{background:#6366f115;color:var(--accent)}.bg{background:#10b98115;color:var(--green)}.bb{background:#3b82f615;color:var(--blue)}
+.screen{flex:1;overflow-y:auto;padding:14px;padding-bottom:80px}
+.tabbar{display:flex;background:#fff;border-top:2px solid var(--border);position:fixed;bottom:0;width:100%;max-width:430px;z-index:100;box-shadow:0 -4px 20px #00000010}
+.tabi{flex:1;display:flex;flex-direction:column;align-items:center;padding:8px 2px 12px;gap:3px;color:var(--muted);border:none;background:transparent;font-size:10px;font-weight:700;font-family:'Noto Sans KR'}
+.tabi.on{color:var(--accent)}
+.rc{background:var(--card);border-radius:16px;padding:11px 13px;border:2px solid var(--border);margin-bottom:7px;display:flex;align-items:center;gap:9px;box-shadow:0 2px 8px #00000008}
+.rc.r1{border-color:#f59e0b;background:#fffbeb}.rc.r2{border-color:#9ca3af;background:#f9fafb}.rc.r3{border-color:#d97706;background:#fffbf0}
+.pulse{animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+.su{animation:su .2s ease-out}
+@keyframes su{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);padding:11px 22px;border-radius:30px;font-weight:700;font-size:13px;z-index:9999;box-shadow:0 6px 24px #00000025;white-space:nowrap;animation:su .2s ease-out}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:2px}
+.hbtn{position:relative;overflow:hidden;user-select:none;border:none;border-radius:16px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:100%;padding:16px}
+.hbtn:disabled{opacity:.4}
+.hprog{position:absolute;left:0;top:0;height:100%;background:#ffffff35;border-radius:16px;pointer-events:none}
+.check-row{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.check-row input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent);flex-shrink:0;margin-top:2px}
+.ex-big{background:linear-gradient(135deg,#6366f108,#8b5cf608);border-radius:20px;padding:18px 16px;border:2px solid #6366f130;margin-bottom:10px;text-align:center}
+.ex-next{background:#f7f9ff;border-radius:16px;padding:12px 14px;border:2px solid var(--border);margin-bottom:10px;text-align:center}
+button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+// ═══════════════════════════════════════════
+// 상수 & 스토리지
+// ═══════════════════════════════════════════
+const ALL_CLASSES = [
+  "2-1","2-2","2-3","2-4","2-5","2-6","2-7","2-8","2-9","2-10","2-11","2-12","2-13","2-14","2-15","2-16",
+  "3-1","3-2","3-3","3-4","3-5","3-6","3-7","3-8","3-9","3-10","3-11","3-12","3-13","3-14","3-15","3-16"
+];
+const CLASSES_2 = ["2-1","2-2","2-3","2-4","2-5","2-6","2-7","2-8","2-9","2-10","2-11","2-12","2-13","2-14","2-15","2-16"];
+const CLASSES_3 = ["3-1","3-2","3-3","3-4","3-5","3-6","3-7","3-8","3-9","3-10","3-11","3-12","3-13","3-14","3-15","3-16"];
+const makeTeams = n => Array.from({length:n},(_,i)=>`${i+1}팀`);
+const fmtTime = s => `${String(Math.floor(Math.abs(s)/60)).padStart(2,'0')}:${String(Math.floor(Math.abs(s))%60).padStart(2,'0')}`;
+const fmtTimeMs = s => { const m=Math.floor(Math.abs(s)/60); const sec=Math.floor(Math.abs(s))%60; const cs=Math.floor((Math.abs(s)-Math.floor(Math.abs(s)))*100); return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}.${String(cs).padStart(2,'0')}`; };
+const fmtDate = iso => { if(!iso)return''; const d=new Date(iso); return `${d.getMonth()+1}/${d.getDate()}`; };
+const fmtFull = iso => { if(!iso)return''; const d=new Date(iso); return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`; };
+
+const stor = {
+  get:(k,d=null)=>{ try{ const v=localStorage.getItem(k); return v===null?d:JSON.parse(v); }catch{return d} },
+  set:(k,v)=>{ try{localStorage.setItem(k,JSON.stringify(v))}catch{} }
+};
+window._stor = stor;
+
+// 교사 계정 관리
+function getTeachers(){ return stor.get('teacher_accounts_'+(S.selectedSchoolId||'wolchon'),[]); }
+function saveTeachers(arr){ stor.set('teacher_accounts_'+(S.selectedSchoolId||'wolchon'),arr); }
+function findTeacher(id){ return getTeachers().find(t=>t.id===id)||null; }
+
+// 학교 관리
+function getSchools(){
+  const defaults=[{id:'wolchon',name:'월촌중학교',createdAt:'2024-01-01'}];
+  const customs=stor.get('school_list',[]);
+  return [...defaults,...customs];
+}
+function saveSchools(list){ stor.set('school_list',list.filter(s=>s.id!=='wolchon')); }
+function getCurrentSchool(){ return getSchools().find(s=>s.id===S.selectedSchoolId)||getSchools()[0]; }
+
+function getClassesForTeacher(tid){
+  const c=getTeacherClasses(tid);
+  return (c&&c.length>0)?c:ALL_CLASSES;
+}
+
+// WOD 관리
+const DEFAULT_WOD = {
+  id:'wod_default',title:'10분 AMRAP',type:'AMRAP',
+  teamMode:'team',teamCount:8,
+  timeLimitMin:10,timeLimitSec:0,timeLimit:600,
+  targetSets:3,
+  exercises:['50m 달리기','점프스쿼트 10회','버피 5회','파머스캐리 20m'],
+  date:new Date().toISOString().slice(0,10)
+};
+function schoolKey(key){ return (S.selectedSchoolId||'wolchon')+'_'+key; }
+function getWodForTeacher(tid){ const map=stor.get(schoolKey('wod_current_by_teacher'),{}); return map[tid]||{...DEFAULT_WOD}; }
+function setWodForTeacher(tid,wod){ const map=stor.get(schoolKey('wod_current_by_teacher'),{}); map[tid]=wod; stor.set(schoolKey('wod_current_by_teacher'),map); }
+function getWodList(tid){ return stor.get(schoolKey('wod_list_'+tid),[]); }
+function setWodList(tid,list){ stor.set(schoolKey('wod_list_'+tid),list); }
+function getActiveWodIds(tid){ return stor.get(schoolKey('wod_active_'+tid),[]); }
+function setActiveWodIds(tid,ids){ stor.set(schoolKey('wod_active_'+tid),ids); }
+function getTeacherClasses(tid){ const map=stor.get(schoolKey('teacher_classes'),{}); return map[tid]||null; }
+function setTeacherClasses(tid,classes){ const map=stor.get(schoolKey('teacher_classes'),{}); map[tid]=classes; stor.set(schoolKey('teacher_classes'),map); }
+
+function getMembers(r){ if(r.members&&r.members.length)return r.members; if(r.name)return[r.name]; return[]; }
+
+// ═══════════════════════════════════════════
+// 전역 상태
+// ═══════════════════════════════════════════
+let _simWodCache = null; // 시뮬레이션용 WOD 캐시 (저장 불필요)
+
+window._selectWod=function(wId){
+  setState({lWodId:wId,lErr:''});
+};
+window._startSim=function(wId){
+  const tid=S.lTeacherId||S.user?.teacherId||'';
+  const wodList=getWodList(tid);
+  const w=wodList.find(x=>x.id===wId);
+  if(!w)return;
+  _simWodCache=w;
+  S.adminWodSimId=wId;
+  S.simData=null;S.simSlide=0;S.simPlaying=false;S.simFromStudent=true;
+  S.screen='wodSim';
+  render();
+};
+let S = {
+  screen: 'schoolSelect', tab:'home', user:null,
+  // 학교 선택
+  selectedSchoolId: stor.get('selected_school_id', 'wolchon'),
+  schoolAddMode: false, schoolAddName:'', schoolAddCode:'', schoolAddErr:'',
+  records: stor.get((stor.get('selected_school_id','wolchon'))+'_wod_records',[]),
+  toast:null,
+  // 로그인
+  lStep:1,
+  lTeacherId:'', lCls:'', lTeam:'', lName:'', lMembers:[], lMemberInput:'', lErr:'', lWodId:'', lGrade:'2', wodListLoaded:false, wodListReady:false,
+  lAdminMode:false, lAdminId:'', lAdminPw:'',
+  // 회원가입
+  lShowMasterInput:false, lMasterCode:'', lMasterErr:'',
+  lSignupMode:false, lSignupName:'', lSignupId:'', lSignupPw:'', lSignupPw2:'', lSignupErr:'',
+  // workout
+  wPhase:'ready', wCountdown:10,
+  // AMRAP
+  aTimeLeft:0, aSets:0, aRunning:false, aDone:false,
+  aCheckLogs:[], aCooldown:0, aExCooldown:0,
+  aChk1:false, aChk2:false,
+  aCurExIdx:0, aExLog:[],
+  // ForTime
+  fElapsed:0, fRunning:false, fDone:false,
+  fSets:0, fSetLogs:[], fCurExIdx:0, fExLog:[], fExCooldown:0,
+  // ForTime (fChk 제거 - aChk1/aChk2로 통일)
+  // EMOM
+  eTimeLeft:0, eRound:1, eRunning:false, eDone:false, eExIdx:0,
+  // saveRecord
+  srSets:0, srReps:0, srTimeMin:0, srTimeSec:0,
+  // rank
+  rankView:'class', rankOnlyTeacherId:'', rankOnlyCls:'전체',
+  // myRecord
+  mrSearch:'',
+  // admin
+  // 체력측정
+  examPhase:'input', examName:'', examCls:'', examStartTime:null, examEndTime:null,
+  examCurStep:0, examErr:'', examTotalSec:0, examResult:null, examRankCls:'전체',
+  adminTab:'wod', adminWod:null, adminNewEx:'', adminWodEditId:null,
+  adminWodSimId:null,
+  simData:null, simSlide:0, simPlaying:false,
+  adminClearTarget:'all', adminConfirm:false,
+  adminFilterCls:'all', adminFilterMode:'all',
+  adminExpandRecord:null,
+  adminClassList:null, adminClassSaving:false, adminClassGrade:'2',
+};
+
+function save(){ stor.set(schoolKey('wod_records'),S.records); }
+function setState(p){ Object.assign(S,p); save(); render(); }
+let _toastTimer=null;
+function showToast(msg,type='success'){
+  if(_toastTimer){clearTimeout(_toastTimer);_toastTimer=null;}
+  Object.assign(S,{toast:{msg,type}});
+  save(); render();
+  _toastTimer=setTimeout(()=>{ Object.assign(S,{toast:null}); render(); _toastTimer=null; },2500);
+}
+function getActiveWod(){
+  if(!S.user?.teacherId) return {...DEFAULT_WOD};
+  const tid=S.user.teacherId;
+  const selId=S.user.selectedWodId;
+  if(selId&&selId!=='__default__'){
+    const found=getWodList(tid).find(w=>w.id===selId);
+    if(found) return found;
+  }
+  return getWodForTeacher(tid);
+}
+
+// Firebase 연동 래퍼
+function fbSaveRecord(rec){ window.fbSaveRecord && window.fbSaveRecord(rec); }
+function fbDeleteRecord(id){ window.fbDeleteRecord && window.fbDeleteRecord(id); }
+function fbSaveTeacher(t){ window.fbSaveTeacher && window.fbSaveTeacher(t); }
+function fbSaveWod(tid,wod){ window.fbSaveWod && window.fbSaveWod(tid,wod); }
+function fbSaveClasses(tid,cls){ window.fbSaveClasses && window.fbSaveClasses(tid,cls); }
+function fbSaveWodList(tid,list){ return window.fbSaveWodList ? window.fbSaveWodList(tid,list) : Promise.resolve(); }
+function fbSaveActiveWodIds(tid,ids){ window.fbSaveActiveWodIds && window.fbSaveActiveWodIds(tid,ids); }
+
+// ═══════════════════════════════════════════
+// ICONS
+// ═══════════════════════════════════════════
+const ic={
+  home:`<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
+  trophy:`<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 010-5H6"/><path d="M18 9h1.5a2.5 2.5 0 000-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0012 0V2z"/></svg>`,
+  user:`<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+  chart:`<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>`,
+  settings:`<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>`,
+  back:`<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>`,
+  plus:`<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  minus:`<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  trash:`<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>`,
+  check:`<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>`,
+  refresh:`<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>`,
+  star:`<svg width="16" height="16" fill="#fbbf24" stroke="#fbbf24" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+  lock:`<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>`,
+  next:`<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>`,
+};
+
+// ═══════════════════════════════════════════
+// DOM 헬퍼
+// ═══════════════════════════════════════════
+function mkDiv(cls,style,html){
+  const d=document.createElement('div');
+  if(cls)d.className=cls;
+  if(style)d.style.cssText=style;
+  if(html!==undefined)d.innerHTML=html;
+  return d;
+}
+function mkBtn(cls,style,html,onclick){
+  const b=document.createElement('button');
+  b.className=cls;
+  if(style)b.style.cssText=style;
+  b.innerHTML=html;
+  if(onclick)b.onclick=onclick;
+  return b;
+}
+function mkInp(cls,attrs,oninput){
+  const i=document.createElement('input');
+  i.className=cls;
+  Object.entries(attrs||{}).forEach(([k,v])=>{ if(k==='value')i.value=v; else i.setAttribute(k,v); });
+  if(oninput)i.oninput=e=>oninput(e.target.value);
+  return i;
+}
+function lbl(text){ return mkDiv('','color:var(--muted);font-size:11px;font-weight:700;margin-bottom:5px;margin-top:10px',text); }
+
+// ═══════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════
+function render(){
+  window._render=render;
+  window._S=S;
+  document.title='WOD CLASS'+(S.selectedSchoolId&&S.selectedSchoolId!=='wolchon'?' - '+(getCurrentSchool()?.name||''):'  - 월촌중학교');
+  const root=document.getElementById('root');
+  root.innerHTML='';
+  root.appendChild(buildScreen());
+  if(S.toast){
+    const t=mkDiv('toast','');
+    t.style.background=S.toast.type==='success'?'var(--green)':'var(--red)';
+    t.textContent=S.toast.msg;
+    root.appendChild(t);
+  }
+}
+
+function buildScreen(){
+  if(S.screen==='schoolSelect')return buildSchoolSelect();
+  if(S.screen==='login')return buildLogin();
+  if(S.screen==='admin')return buildAdmin();
+  if(S.screen==='workout')return buildWorkout();
+  if(S.screen==='saveRecord')return buildSaveRecord();
+  if(S.screen==='saved')return buildSaved();
+  if(S.screen==='rankOnly')return buildRankOnly();
+  if(S.screen==='wodSim')return buildWodSim();
+  if(S.screen==='exam')return buildExam();
+  if(S.screen==='examRank')return buildExamRank();
+  return buildMain();
+}
+
+// ═══════════════════════════════════════════
+// 학교 선택 화면
+// ═══════════════════════════════════════════
+function buildSchoolSelect(){
+  const wrap=mkDiv('','min-height:100vh;display:flex;flex-direction:column;padding:24px;overflow-y:auto;background:var(--bg)');
+  wrap.innerHTML=`<div style="text-align:center;margin-bottom:28px;margin-top:24px">
+    <div class="tf" style="font-size:48px;color:var(--accent);line-height:1">WOD</div>
+    <div class="tf" style="font-size:28px;color:var(--text);letter-spacing:4px">CLASS</div>
+    <div style="color:var(--muted);font-size:12px;margin-top:6px">학교를 선택해주세요</div>
+  </div>`;
+
+  if(S.schoolAddMode){
+    const box=mkDiv('card','border:1px solid var(--accent)30;margin-bottom:14px');
+    box.appendChild(mkDiv('','font-weight:700;font-size:15px;margin-bottom:12px','🏫 새 학교 추가'));
+    box.appendChild(lbl('학교 이름'));
+    const ni=mkInp('inp',{type:'text',placeholder:'예: ○○중학교',value:S.schoolAddName},v=>{S.schoolAddName=v});
+    box.appendChild(ni);
+    box.appendChild(lbl('관리자 코드'));
+    const ci=mkInp('inp',{type:'password',placeholder:'접근 코드',value:S.schoolAddCode||''},v=>{S.schoolAddCode=v});
+    ci.addEventListener('keydown',e=>{if(e.key==='Enter')doAddSchool();});
+    box.appendChild(ci);
+    if(S.schoolAddErr)box.appendChild(mkDiv('','color:var(--red);font-size:12px;margin-top:6px',S.schoolAddErr));
+    const row=mkDiv('','display:flex;gap:6px;margin-top:12px');
+    row.appendChild(mkBtn('btn-p','flex:1','추가',doAddSchool));
+    row.appendChild(mkBtn('btn-s','flex:1','취소',()=>setState({schoolAddMode:false,schoolAddName:'',schoolAddCode:'',schoolAddErr:''})));
+    box.appendChild(row);
+    wrap.appendChild(box);
+  }
+
+  const schools=getSchools();
+  wrap.appendChild(mkDiv('','color:var(--muted);font-size:11px;font-weight:700;margin-bottom:9px',`등록된 학교 (${schools.length}개)`));
+
+  schools.forEach(school=>{
+    const btn=mkBtn('','width:100%;text-align:left;background:var(--card);border:2px solid var(--border);border-radius:16px;padding:16px;margin-bottom:8px;cursor:pointer',
+      `<div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-weight:700;font-size:16px;color:var(--text)">${school.name}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">탭해서 입장</div>
+        </div>
+        <div style="font-size:24px">🏫</div>
+      </div>`,
+      ()=>{
+        S.selectedSchoolId=school.id;
+        stor.set('selected_school_id',school.id);
+        S.records=stor.get(schoolKey('wod_records'),[]);
+        setState({screen:'login',user:null,lStep:1,lAdminMode:false,lTeacherId:'',lCls:'',lTeam:'',lName:'',lMembers:[]});
+      });
+    wrap.appendChild(btn);
+  });
+
+  if(!S.schoolAddMode){
+    wrap.appendChild(mkDiv('','margin-top:6px'));
+    wrap.appendChild(mkBtn('btn-s','','+ 새 학교 추가',()=>setState({schoolAddMode:true,schoolAddName:'',schoolAddCode:'',schoolAddErr:''})));
+  }
+
+  wrap.appendChild(mkDiv('','text-align:center;color:var(--border);font-size:10px;margin-top:24px','WOD CLASS · 학교 체육수업 관리 시스템'));
+  return wrap;
+}
+
+function doAddSchool(){
+  if(!S.schoolAddName.trim()){setState({schoolAddErr:'학교 이름을 입력해주세요'});return;}
+  hashCode(S.schoolAddCode||'').then(h=>{
+    if(h!==MASTER_CODE_HASH){setState({schoolAddErr:'관리자 코드가 틀렸습니다'});return;}
+    const schools=getSchools();
+    const id='school_'+Date.now();
+    const newSchool={id,name:S.schoolAddName.trim(),createdAt:new Date().toISOString()};
+    saveSchools([...schools.filter(s=>s.id!=='wolchon'),newSchool]);
+    // 새 학교 자동 선택 후 로그인 화면으로
+    S.selectedSchoolId=id;
+    stor.set('selected_school_id',id);
+    S.records=stor.get(schoolKey('wod_records'),[]);
+    showToast(`${newSchool.name} 추가 완료! ✅`);
+    setState({schoolAddMode:false,schoolAddName:'',schoolAddCode:'',schoolAddErr:'',screen:'login',lStep:1,user:null,lAdminMode:false});
+  });
+}
+
+// ═══════════════════════════════════════════
+// LOGIN
+// ═══════════════════════════════════════════
+function buildLogin(){
+  const school=getCurrentSchool();
+  const wrap=mkDiv('','min-height:100vh;display:flex;flex-direction:column;padding:20px;overflow-y:auto;background:var(--bg)');
+  wrap.innerHTML=`<div style="text-align:center;margin-bottom:20px">
+    <div class="tf" style="font-size:44px;color:var(--accent);line-height:1">WOD</div>
+    <div class="tf" style="font-size:26px;color:var(--text);letter-spacing:4px">CLASS</div>
+    <div style="color:var(--muted);font-size:12px;margin-top:4px">${school?.name||'월촌중학교'} 체육수업</div>
+  </div>`;
+
+  // 학교 변경 버튼
+  const schoolRow=mkDiv('','display:flex;justify-content:center;margin-bottom:14px');
+  schoolRow.appendChild(mkBtn('','background:var(--card2);border:1px solid var(--border);border-radius:20px;padding:6px 14px;font-size:11px;color:var(--muted)',
+    '🏫 '+school?.name+' · 학교 변경',
+    ()=>setState({screen:'schoolSelect',schoolAddMode:false,user:null,lStep:1,lAdminMode:false,lTeacherId:'',lCls:'',lTeam:'',lName:'',lMembers:[]})));
+  wrap.appendChild(schoolRow);
+
+  if(S.lSignupMode){
+    // 교사 회원가입
+    wrap.innerHTML+=`<div style="font-weight:700;font-size:17px;margin-bottom:14px;text-align:center">${ic.lock} 교사 회원가입</div>`;
+    wrap.appendChild(lbl('관리자 접근 코드'));
+    const mc=mkInp('inp',{type:'password',placeholder:'접근 코드',value:S.lMasterCode||''},v=>{S.lMasterCode=v});
+    wrap.appendChild(mc);
+    wrap.appendChild(lbl('교사 이름'));
+    wrap.appendChild(mkInp('inp',{type:'text',placeholder:'이름',value:S.lSignupName},v=>{S.lSignupName=v}));
+    wrap.appendChild(lbl('아이디'));
+    wrap.appendChild(mkInp('inp',{type:'text',placeholder:'아이디 (영문+숫자)',value:S.lSignupId},v=>{S.lSignupId=v.trim()}));
+    wrap.appendChild(lbl('비밀번호'));
+    wrap.appendChild(mkInp('inp',{type:'password',placeholder:'비밀번호',value:S.lSignupPw},v=>{S.lSignupPw=v}));
+    wrap.appendChild(lbl('비밀번호 확인'));
+    const pw2=mkInp('inp',{type:'password',placeholder:'비밀번호 확인',value:S.lSignupPw2},v=>{S.lSignupPw2=v});
+    pw2.addEventListener('keydown',e=>{if(e.key==='Enter')doSignup()});
+    wrap.appendChild(pw2);
+    if(S.lSignupErr)wrap.appendChild(mkDiv('','color:var(--red);font-size:12px;text-align:center;margin-top:7px',S.lSignupErr));
+    wrap.appendChild(mkBtn('btn-p','margin-top:14px;margin-bottom:7px','회원가입',doSignup));
+    wrap.appendChild(mkBtn('btn-s','','← 로그인으로',()=>setState({lSignupMode:false,lSignupErr:'',lMasterCode:''})));
+    return wrap;
+  }
+
+  if(!S.lAdminMode){
+    // 학생 로그인
+    if(S.lStep===1){
+      // Step1: 선생님 선택
+      const teachers=getTeachers();
+      wrap.appendChild(mkDiv('','color:var(--muted);font-size:13px;font-weight:700;margin-bottom:9px','오늘 수업 담당 선생님을 선택하세요'));
+      if(teachers.length===0){
+        wrap.appendChild(mkDiv('','background:var(--card);border-radius:12px;padding:14px;text-align:center;color:var(--muted);font-size:13px;margin-bottom:14px','아직 등록된 선생님이 없습니다.<br>교사 관리자 모드에서 회원가입해주세요.'));
+      } else {
+        const tg=mkDiv('','display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:14px');
+        teachers.forEach(t=>{
+          tg.appendChild(mkBtn(`chip ${S.lTeacherId===t.id?'on':''}`,`padding:13px;font-size:14px`,t.name,()=>setState({lTeacherId:t.id,lErr:''})));
+        });
+        wrap.appendChild(tg);
+      }
+      if(S.lErr)wrap.appendChild(mkDiv('','color:var(--red);font-size:12px;text-align:center;margin-bottom:7px',S.lErr));
+      wrap.appendChild(mkBtn('btn-p','margin-bottom:9px','다음 →',()=>{
+        if(!S.lTeacherId){setState({lErr:'선생님을 선택해주세요'});return;}
+        setState({lStep:2,lErr:'',lWodId:'',wodListLoaded:false,wodListReady:false});
+      }));
+
+    } else if(S.lStep===2){
+      // Step2: WOD 선택
+      const teacher=findTeacher(S.lTeacherId);
+      const tid=S.lTeacherId;
+
+      // Firebase에서 WOD 목록 항상 최신으로 로드
+      if(!S.wodListLoaded){
+        S.wodListLoaded=true;
+        S.wodListReady=false;
+        if(window.fbLoadWodList){
+          window.fbLoadWodList(tid).then(()=>{S.wodListReady=true;render();});
+        } else {
+          S.wodListReady=true;
+        }
+        render();
+        return wrap;
+      }
+
+      // 로딩 중이면 스피너 표시
+      if(!S.wodListReady){
+        wrap.appendChild(mkDiv('','text-align:center;padding:40px',
+          `<div style="font-size:13px;color:var(--muted)">WOD 불러오는 중...</div>`));
+        wrap.appendChild(mkBtn('btn-s','margin-top:10px','← 뒤로',()=>setState({lStep:1,lErr:'',wodListLoaded:false,wodListReady:false})));
+        return wrap;
+      }
+
+      const wodList=getWodList(tid);
+      const activeIds=getActiveWodIds(tid);
+      const visibleWods=wodList.filter(w=>activeIds.includes(w.id));
+
+      const hdr=mkDiv('','display:flex;align-items:center;gap:7px;margin-bottom:12px;background:var(--card);border-radius:12px;padding:9px 12px',
+        `<div style="font-size:16px">👨‍🏫</div><div style="flex:1"><div style="font-size:13px;font-weight:700">${teacher?.name||'선생님'}</div></div>`);
+      hdr.appendChild(mkBtn('','background:none;border:none;color:var(--muted);font-size:11px','변경',()=>setState({lStep:1,lErr:'',wodListLoaded:false,wodListReady:false})));
+      wrap.appendChild(hdr);
+
+      wrap.appendChild(mkDiv('','color:var(--muted);font-size:13px;font-weight:700;margin-bottom:9px','오늘 WOD를 선택하세요'));
+
+      if(visibleWods.length===0){
+        wrap.appendChild(mkDiv('','background:var(--card);border-radius:14px;padding:20px;text-align:center;color:var(--muted);font-size:13px;margin-bottom:14px','아직 공개된 WOD가 없습니다.<br>선생님께 문의해주세요 😊'));
+        wrap.appendChild(mkBtn('btn-s','','← 뒤로',()=>setState({lStep:1,lErr:'',wodListLoaded:false,wodListReady:false})));
+      } else {
+        visibleWods.forEach(w=>{
+          const tl=w.timeLimit||(w.timeLimitMin||10)*60+(w.timeLimitSec||0);
+          const isInd=w.teamMode==='individual';
+          const isSelected=S.lWodId===w.id;
+          const wId=w.id;
+
+          const cardWrap=mkDiv('','margin-bottom:10px');
+          cardWrap.innerHTML=`
+            <div onclick="window._selectWod('${wId}')" style="width:100%;text-align:left;background:var(--card);border-radius:14px;padding:13px;border:2px solid ${isSelected?'var(--accent)':'var(--border)'};cursor:pointer;box-sizing:border-box">
+              <div style="font-weight:700;font-size:14px;margin-bottom:5px;color:var(--text)">${w.title}</div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">
+                <span class="badge bo">${w.type}</span>
+                <span class="badge ${isInd?'bg':'bb'}">${isInd?'🏃 개인전':'👥 팀전'}</span>
+                ${w.type==='AMRAP'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${fmtTime(tl)}</span>`:w.type==='EMOM'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${w.emomRounds||w.exercises.length}분</span>`:`<span class="badge" style="background:var(--card2);color:var(--muted)">${w.targetSets}세트</span>`}
+              </div>
+              <div>${w.exercises.map((ex,i)=>`<div style="font-size:11px;color:var(--muted);padding:1px 0">${i+1}. ${ex}</div>`).join('')}</div>
+            </div>
+            <button onclick="window._startSim('${wId}')" style="width:100%;margin-top:4px;padding:10px;background:var(--blue);color:white;border:none;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif">🎬 시뮬레이션 보기</button>`;
+          wrap.appendChild(cardWrap);
+        });
+      }
+
+      if(S.lErr)wrap.appendChild(mkDiv('','color:var(--red);font-size:12px;text-align:center;margin-bottom:7px',S.lErr));
+      if(visibleWods.length>0){
+        wrap.appendChild(mkBtn('btn-p','margin-top:4px;margin-bottom:7px','다음 →',()=>{
+          if(!S.lWodId){setState({lErr:'WOD를 선택해주세요'});return;}
+          setState({lStep:3,lErr:''});
+        }));
+        wrap.appendChild(mkBtn('btn-s','','← 뒤로',()=>setState({lStep:1,lErr:'',wodListLoaded:false,wodListReady:false})));
+      }
+
+    } else {
+      // Step3: 반 + 팀/이름
+      const selWod=S.lWodId==='__default__'
+        ?getWodForTeacher(S.lTeacherId)
+        :(getWodList(S.lTeacherId).find(w=>w.id===S.lWodId)||getWodForTeacher(S.lTeacherId));
+      const isInd=selWod.teamMode==='individual';
+      const tc=selWod.teamCount||8;
+      const teacher=findTeacher(S.lTeacherId);
+      const myClasses=getClassesForTeacher(S.lTeacherId);
+
+      const hdr=mkDiv('','display:flex;align-items:center;gap:7px;margin-bottom:12px;background:var(--card);border-radius:12px;padding:9px 12px',
+        `<div style="font-size:16px">👨‍🏫</div><div style="flex:1"><div style="font-size:13px;font-weight:700">${teacher?.name||'선생님'}</div><div style="font-size:10px;color:var(--muted)">${selWod.title} · ${isInd?'개인전':'팀전'}</div></div>`);
+      hdr.appendChild(mkBtn('','background:none;border:none;color:var(--muted);font-size:11px','변경',()=>setState({lStep:2,lErr:'',wodListLoaded:false,wodListReady:false})));
+      wrap.appendChild(hdr);
+
+      wrap.appendChild(lbl('반 선택'));
+      // 학년 탭
+      const gradeTab=mkDiv('','display:flex;gap:6px;margin-bottom:8px');
+      ['2학년','3학년'].forEach((g,gi)=>{
+        const isOn=(S.lGrade||'2')===(gi===0?'2':'3');
+        gradeTab.appendChild(mkBtn(`chip ${isOn?'on':''}`,`flex:1;font-size:13px;padding:9px`,g,()=>setState({lGrade:gi===0?'2':'3',lCls:'',lErr:''})));
+      });
+      wrap.appendChild(gradeTab);
+      const gradeClasses=myClasses.filter(c=>c.startsWith((S.lGrade||'2')+'-'));
+      const cg=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:12px');
+      gradeClasses.forEach(c=>{
+        cg.appendChild(mkBtn(`chip ${S.lCls===c?'on':''}`,`font-size:11px;padding:7px 2px`,c,()=>setState({lCls:c,lErr:''})));
+      });
+      wrap.appendChild(cg);
+
+      if(isInd){
+        wrap.appendChild(lbl('이름 입력'));
+        const ni=mkInp('inp',{type:'text',placeholder:'이름',value:S.lName},v=>{S.lName=v});
+        ni.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+        wrap.appendChild(ni);
+      } else {
+        wrap.appendChild(lbl('팀 선택'));
+        const tg2=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:10px');
+        makeTeams(tc).forEach(t=>{
+          tg2.appendChild(mkBtn(`chip ${S.lTeam===t?'on':''}`,`font-size:11px;padding:7px 2px`,t,()=>setState({lTeam:t,lErr:''})));
+        });
+        wrap.appendChild(tg2);
+        wrap.appendChild(lbl('참여 팀원 입력 (최소 1명)'));
+        const mr=mkDiv('','display:flex;gap:6px;margin-bottom:7px');
+        const mi=mkInp('inp',{type:'text',placeholder:'팀원 이름',value:S.lMemberInput},v=>{S.lMemberInput=v});
+        mi.addEventListener('keydown',e=>{if(e.key==='Enter')addMember()});
+        mr.appendChild(mi);
+        mr.appendChild(mkBtn('btn-g','width:44px;border-radius:11px',ic.plus,addMember));
+        wrap.appendChild(mr);
+        if(S.lMembers.length>0){
+          const ml=mkDiv('','display:flex;flex-wrap:wrap;gap:4px;margin-bottom:7px');
+          S.lMembers.forEach((m,i)=>{
+            const tag=mkDiv('','display:flex;align-items:center;gap:4px;background:var(--card2);border:1px solid var(--border);border-radius:18px;padding:4px 9px;font-size:12px',`<span>${m}</span>`);
+            tag.appendChild(mkBtn('','background:none;border:none;color:var(--red);padding:0',ic.trash,()=>{S.lMembers.splice(i,1);render();}));
+            ml.appendChild(tag);
+          });
+          wrap.appendChild(ml);
+        }
+      }
+
+      if(S.lErr)wrap.appendChild(mkDiv('','color:var(--red);font-size:12px;text-align:center;margin:7px 0',S.lErr));
+      wrap.appendChild(mkBtn('btn-p','margin-top:10px;margin-bottom:7px',isInd?'운동 시작하기 🔥':'우리 팀 운동 시작하기 🔥',doLogin));
+      wrap.appendChild(mkBtn('btn-s','','← 뒤로',()=>setState({lStep:2,lErr:'',wodListLoaded:false,wodListReady:false})));
+    }
+  } else {
+    // 교사 로그인
+    wrap.innerHTML+=`<div style="text-align:center;margin-bottom:13px">${ic.lock}<div style="font-weight:700;font-size:16px;margin-top:4px">교사 로그인</div></div>`;
+    wrap.appendChild(lbl('아이디'));
+    const ii=mkInp('inp',{type:'text',placeholder:'아이디',value:S.lAdminId},v=>{S.lAdminId=v.trim()});
+    wrap.appendChild(ii);
+    wrap.appendChild(lbl('비밀번호'));
+    const pi=mkInp('inp',{type:'password',placeholder:'비밀번호',value:S.lAdminPw},v=>{S.lAdminPw=v});
+    pi.addEventListener('keydown',e=>{if(e.key==='Enter')doAdminLogin()});
+    wrap.appendChild(pi);
+    if(S.lErr)wrap.appendChild(mkDiv('','color:var(--red);font-size:12px;text-align:center;margin-top:7px',S.lErr));
+    wrap.appendChild(mkBtn('btn-p','margin-top:12px;margin-bottom:7px','로그인',doAdminLogin));
+    wrap.appendChild(mkBtn('btn-s','margin-bottom:7px','회원가입',()=>{
+      setState({lSignupMode:true,lSignupErr:'',lAdminMode:false});
+    }));
+    wrap.appendChild(mkBtn('btn-s','','← 뒤로',()=>setState({lAdminMode:false,lErr:''})));
+  }
+
+  if(!S.lAdminMode&&!S.lSignupMode&&S.lStep===1){
+    wrap.appendChild(mkDiv('','margin-top:14px'));
+    wrap.appendChild(mkBtn('btn-s','margin-bottom:7px','🏆 순위 보기',()=>setState({screen:'rankOnly'})));
+    wrap.appendChild(mkBtn('','width:100%;padding:28px 16px;margin-bottom:7px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:white;border:none;border-radius:20px;font-size:26px;font-weight:900;cursor:pointer;font-family:"Black Han Sans",sans-serif;letter-spacing:3px;line-height:1.3','🏃 2학년 체력측정',()=>{
+      setState({screen:'exam',examPhase:'input',examName:'',examCls:'',examStartTime:null,examEndTime:null,examCurStep:0});
+    }));
+    if(!S.lShowMasterInput){
+      wrap.appendChild(mkBtn('btn-s','','👨‍🏫 교사 관리자 모드',()=>setState({lShowMasterInput:true,lMasterCode:'',lMasterErr:''})));
+    } else {
+      const box=mkDiv('card','margin-top:0;border:1px solid #f9731630');
+      box.appendChild(mkDiv('','font-size:12px;font-weight:700;margin-bottom:8px;color:var(--muted)','🔐 관리자 접근 코드 입력'));
+      const ci=mkInp('inp',{type:'password',placeholder:'접근 코드',value:S.lMasterCode||''},v=>{S.lMasterCode=v});
+      ci.addEventListener('keydown',e=>{if(e.key==='Enter')checkMasterCode()});
+      box.appendChild(ci);
+      if(S.lMasterErr)box.appendChild(mkDiv('','color:var(--red);font-size:12px;margin-top:6px',S.lMasterErr));
+      const row=mkDiv('','display:flex;gap:6px;margin-top:9px');
+      row.appendChild(mkBtn('btn-p','flex:1','확인',checkMasterCode));
+      row.appendChild(mkBtn('btn-s','flex:1','취소',()=>setState({lShowMasterInput:false,lMasterCode:'',lMasterErr:''})));
+      box.appendChild(row);
+      wrap.appendChild(box);
+    }
+  }
+  wrap.appendChild(mkDiv('','text-align:center;color:var(--border);font-size:11px;margin-top:22px',(getCurrentSchool()?.name||'월촌중학교')+' 체육수업'));
+  return wrap;
+}
+
+// ── 마스터 코드 해시 검증 (코드 원문을 소스에 노출하지 않음) ──
+// 접근 코드의 SHA-256 해시값
+const MASTER_CODE_HASH='287ee01c1bb5fab6c456f20a1c0459b6d05e26851fa3be5da36e0e816c354db1';
+async function hashCode(str){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function checkMasterCode(){
+  hashCode(S.lMasterCode||'').then(h=>{
+    if(h===MASTER_CODE_HASH){
+      setState({lAdminMode:true,lErr:'',lShowMasterInput:false,lMasterCode:'',lMasterErr:''});
+    } else {
+      setState({lMasterErr:'접근 코드가 틀렸습니다'});
+    }
+  });
+}
+
+function doSignup(){
+  const {lSignupName:name,lSignupId:id,lSignupPw:pw,lSignupPw2:pw2}=S;
+  hashCode(S.lMasterCode||'').then(h=>{
+    if(h!==MASTER_CODE_HASH){setState({lSignupErr:'접근 코드가 틀렸습니다'});return;}
+    if(!name.trim()){setState({lSignupErr:'이름을 입력해주세요'});return;}
+    if(!id){setState({lSignupErr:'아이디를 입력해주세요'});return;}
+    if(pw.length<4){setState({lSignupErr:'비밀번호는 4자 이상이어야 합니다'});return;}
+    if(pw!==pw2){setState({lSignupErr:'비밀번호가 일치하지 않습니다'});return;}
+    const teachers=getTeachers();
+    if(teachers.find(t=>t.id===id)){setState({lSignupErr:'이미 사용 중인 아이디입니다'});return;}
+    const newTeacher={id,name:name.trim(),password:pw,createdAt:new Date().toISOString()};
+    teachers.push(newTeacher);
+    saveTeachers(teachers);
+    fbSaveTeacher(newTeacher); // Firebase 동기화
+    showToast('회원가입 완료! 로그인해주세요 ✅');
+    setState({lSignupMode:false,lAdminMode:true,lAdminId:id,lAdminPw:'',lSignupErr:'',lSignupName:'',lSignupId:'',lSignupPw:'',lSignupPw2:''});
+  });
+}
+
+function addMember(){
+  if(!S.lMemberInput.trim())return;
+  if(!S.lMembers.includes(S.lMemberInput.trim()))S.lMembers=[...S.lMembers,S.lMemberInput.trim()];
+  S.lMemberInput='';render();
+}
+
+function doLogin(){
+  const selWod=S.lWodId==='__default__'
+    ?getWodForTeacher(S.lTeacherId)
+    :(getWodList(S.lTeacherId).find(w=>w.id===S.lWodId)||getWodForTeacher(S.lTeacherId));
+  const isInd=selWod.teamMode==='individual';
+  if(!S.lCls){setState({lErr:'반을 선택해주세요'});return;}
+  if(isInd){
+    if(!S.lName.trim()){setState({lErr:'이름을 입력해주세요'});return;}
+    setState({user:{class:S.lCls,name:S.lName.trim(),team:'개인전',members:[S.lName.trim()],mode:'individual',teacherId:S.lTeacherId,selectedWodId:S.lWodId},screen:'main',tab:'home',lErr:''});
+  } else {
+    if(!S.lTeam){setState({lErr:'팀을 선택해주세요'});return;}
+    if(S.lMembers.length===0){setState({lErr:'팀원을 최소 1명 입력해주세요'});return;}
+    setState({user:{class:S.lCls,team:S.lTeam,members:S.lMembers,mode:'team',teacherId:S.lTeacherId,selectedWodId:S.lWodId},screen:'main',tab:'home',lErr:''});
+  }
+}
+
+function doAdminLogin(){
+  const t=findTeacher(S.lAdminId);
+  if(t&&t.password===S.lAdminPw){
+    const adminWod=getWodForTeacher(t.id);
+    const adminClassList=getTeacherClasses(t.id)||[];
+    setState({user:{class:'ALL',team:'교사',name:t.name,teacherId:t.id,isAdmin:true},screen:'admin',adminWod:null,adminWodEditId:null,adminClassList,lErr:''});
+  } else {
+    setState({lErr:'아이디 또는 비밀번호가 틀렸습니다.'});
+  }
+}
+
+// ═══════════════════════════════════════════
+// MAIN
+// ═══════════════════════════════════════════
+function buildMain(){
+  const wrap=mkDiv('','display:flex;flex-direction:column;min-height:100vh;background:var(--bg)');
+  const isInd=S.user?.mode==='individual';
+  const teacher=findTeacher(S.user?.teacherId);
+  const userLabel=isInd?`${S.user?.class} · ${S.user?.name}`:`${S.user?.class} · ${S.user?.team} (${S.user?.members?.join(', ')})`;
+
+  const hdr=mkDiv('','background:var(--card);border-bottom:1px solid var(--border);padding:11px 14px;display:flex;align-items:center;justify-content:space-between');
+  hdr.innerHTML=`<div><div class="tf" style="font-size:19px;color:var(--accent)">WOD CLASS</div><div style="font-size:10px;color:var(--muted);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${userLabel} · ${teacher?.name||''}</div></div>`;
+  hdr.appendChild(mkBtn('','background:none;border:none;color:var(--muted)',ic.settings,()=>setState({screen:'schoolSelect',user:null,lStep:1,lAdminMode:false,lTeacherId:'',lCls:'',lTeam:'',lName:'',lMembers:[]})));
+  wrap.appendChild(hdr);
+
+  const sc=mkDiv('screen su','');
+  if(S.tab==='home')sc.appendChild(buildHome());
+  else if(S.tab==='rank')sc.appendChild(buildRank());
+  else if(S.tab==='myRecord')sc.appendChild(buildMyRecord());
+  else if(S.tab==='growth')sc.appendChild(buildGrowth());
+  wrap.appendChild(sc);
+
+  const tb=mkDiv('tabbar','');
+  [['home',ic.home,'홈'],['rank',ic.trophy,'순위'],['myRecord',ic.user,isInd?'내 기록':'팀 기록'],['growth',ic.chart,'성장']].forEach(([id,ico,lbl])=>{
+    tb.appendChild(mkBtn(`tabi ${S.tab===id?'on':''}`,``,ico+`<span>${lbl}</span>`,()=>setState({tab:id})));
+  });
+  wrap.appendChild(tb);
+  return wrap;
+}
+
+// ═══════════════════════════════════════════
+// HOME
+// ═══════════════════════════════════════════
+function buildHome(){
+  const wrap=mkDiv('','');
+  const wod=getActiveWod();
+  const today=new Date().toISOString().slice(0,10);
+  const todayRecs=S.records.filter(r=>r.date.slice(0,10)===today&&r.teacherId===S.user?.teacherId);
+  const clsRecs=todayRecs.filter(r=>r.class===S.user?.class);
+  const isInd=S.user?.mode==='individual';
+  const teacher=findTeacher(S.user?.teacherId);
+  const tl=wod.timeLimit||(wod.timeLimitMin||10)*60+(wod.timeLimitSec||0);
+
+  let myRec=isInd
+    ?clsRecs.find(r=>r.name===S.user?.name&&r.wodType===wod.type)
+    :clsRecs.find(r=>r.team===S.user?.team&&r.mode==='team'&&r.wodType===wod.type);
+  let topRec=null;
+  if(wod.type==='AMRAP'&&clsRecs.length>0)topRec=clsRecs.reduce((a,b)=>a.sets>b.sets||(a.sets===b.sets&&a.reps>b.reps)?a:b);
+  else if(wod.type==='EMOM'&&clsRecs.length>0)topRec=clsRecs.reduce((a,b)=>(a.sets||0)>=(b.sets||0)?a:b);
+  else if(wod.type==='ForTime'&&clsRecs.length>0)topRec=clsRecs.reduce((a,b)=>a.time<b.time?a:b);
+
+  const wc=mkDiv('card','margin-bottom:11px;border:1px solid #f9731630');
+  wc.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <div><div style="color:var(--muted);font-size:10px;font-weight:600;margin-bottom:2px">오늘의 WOD · ${teacher?.name||''}</div>
+    <div class="tf" style="font-size:19px">${wod.title}</div></div>
+    <span class="badge ${wod.type==='AMRAP'?'bo':wod.type==='EMOM'?'bg':'bb'}">${wod.type}</span>
+  </div>
+  <div style="background:var(--card2);border-radius:9px;padding:9px;margin-bottom:9px">
+    ${wod.type==='AMRAP'?`<div style="color:var(--accent);font-weight:700;font-size:11px;margin-bottom:5px">⏱ ${fmtTime(tl)} AMRAP — 최대한 많이 반복!</div>`:wod.type==='EMOM'?`<div style="color:var(--green);font-weight:700;font-size:11px;margin-bottom:5px">🕐 ${wod.emomRounds||wod.exercises.length}분 EMOM — 매 분마다 새 운동!</div>`:`<div style="color:var(--blue);font-weight:700;font-size:11px;margin-bottom:5px">🎯 ${wod.targetSets}세트 For Time — 최대한 빠르게!</div>`}
+    ${wod.exercises.map((ex,i)=>`<div style="padding:3px 0;${i<wod.exercises.length-1?'border-bottom:1px solid var(--border)':''}display:flex;gap:5px;font-size:12px"><span style="color:var(--accent);font-weight:700;min-width:16px">${wod.type==='EMOM'?`${i+1}분:`:`${i+1}.`}</span>${ex}</div>`).join('')}
+  </div>`;
+  if(myRec){
+    wc.innerHTML+=`<div style="background:#22c55e15;border:1px solid #22c55e40;border-radius:9px;padding:9px;text-align:center">
+      <div style="color:var(--green);font-weight:700;font-size:11px;margin-bottom:2px">✅ 기록 완료!</div>
+      <div style="font-weight:700;font-size:15px">${wod.type==='AMRAP'?`${myRec.sets}세트 + ${myRec.reps}회`:wod.type==='EMOM'?`${myRec.sets||0}라운드 완료`:fmtTime(myRec.time)}</div>
+    </div>`;
+  } else {
+    wc.appendChild(mkBtn('btn-p','margin-top:3px',isInd?'운동 시작하기 🔥':'우리 팀 운동 시작하기 🔥',
+      ()=>setState({screen:'workout',wPhase:'ready',wCountdown:10,aCurExIdx:0,aExLog:[],fCurExIdx:0,fExLog:[],fSets:0,fSetLogs:[],fDone:false,eExIdx:0,eRound:1,eDone:false,eTimeLeft:60})));
+  }
+  wrap.appendChild(wc);
+
+  const participants=[...new Set(clsRecs.flatMap(r=>getMembers(r)))];
+  const sc=mkDiv('card','margin-bottom:11px');
+  sc.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:8px">📊 ${S.user?.class} 오늘 현황</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
+      <div style="background:var(--card2);border-radius:9px;padding:9px;text-align:center"><div style="font-size:22px;font-weight:900;color:var(--accent)">${participants.length}</div><div style="color:var(--muted);font-size:10px">참여 인원</div></div>
+      <div style="background:var(--card2);border-radius:9px;padding:9px;text-align:center"><div style="font-size:18px;font-weight:900;color:var(--yellow)">${topRec?(wod.type==='AMRAP'?topRec.sets+'S':wod.type==='EMOM'?(topRec.sets||0)+'R':fmtTime(topRec.time)):'-'}</div><div style="color:var(--muted);font-size:10px">반 최고기록</div></div>
+    </div>`;
+  if(topRec)sc.innerHTML+=`<div style="margin-top:7px;background:var(--card2);border-radius:9px;padding:7px;display:flex;align-items:center;gap:4px">${ic.star}<span style="font-weight:700;font-size:12px">${getMembers(topRec).join(', ')||topRec.team}</span><span style="margin-left:auto;color:var(--gold);font-weight:700;font-size:12px">${wod.type==='AMRAP'?`${topRec.sets}S+${topRec.reps}`:wod.type==='EMOM'?`${topRec.sets||0}R`:fmtTime(topRec.time)}</span></div>`;
+  wrap.appendChild(sc);
+  return wrap;
+}
+
+// ═══════════════════════════════════════════
+// WORKOUT
+// ═══════════════════════════════════════════
+function buildWorkout(){
+  if(S.wPhase==='ready')return buildWorkoutReady();
+  if(S.wPhase==='countdown')return buildWorkoutCountdown();
+  const wod=getActiveWod();
+  return wod.type==='AMRAP'?buildAmrap():wod.type==='EMOM'?buildEmom():buildForTime();
+}
+
+function buildWorkoutReady(){
+  const wod=getActiveWod();
+  const isInd=S.user?.mode==='individual';
+  const tl=wod.timeLimit||(wod.timeLimitMin||10)*60+(wod.timeLimitSec||0);
+  const wrap=mkDiv('','min-height:100vh;padding:18px;display:flex;flex-direction:column;background:var(--bg)');
+  wrap.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px;display:flex;align-items:center;gap:5px;margin-bottom:14px',ic.back+' 돌아가기',()=>setState({screen:'main'})));
+  const c=mkDiv('card','margin-bottom:13px;border:1px solid #f9731630');
+  const typeColor=wod.type==='AMRAP'?'bo':wod.type==='EMOM'?'bg':'bb';
+  const typeDesc=wod.type==='AMRAP'
+    ?`⏱ <b>${fmtTime(tl)}</b> 동안 아래 운동을 최대한 많이 반복해요!`
+    :wod.type==='EMOM'
+    ?`🕐 매 분마다 새 운동! <b>${wod.emomRounds||wod.exercises.length}분</b> 동안 총 ${wod.exercises.length}가지 운동을 순서대로 합니다.`
+    :`🎯 아래 운동을 <b>${wod.targetSets}세트</b> 최대한 빠르게 완료해요!`;
+  c.innerHTML=`<div class="tf" style="font-size:18px;margin-bottom:4px">${wod.title}</div>
+    <div style="display:flex;gap:5px;margin-bottom:8px">
+      <span class="badge ${typeColor}">${wod.type}</span>
+      ${wod.type==='AMRAP'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${fmtTime(tl)}</span>`:wod.type==='EMOM'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.emomRounds||wod.exercises.length}분</span>`:`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.targetSets}세트</span>`}
+    </div>
+    <div style="background:var(--card2);border-radius:9px;padding:9px 11px;font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">${typeDesc}</div>
+    ${wod.exercises.map((ex,i)=>`<div style="padding:6px 0;${i<wod.exercises.length-1?'border-bottom:1px solid var(--border)':''}display:flex;gap:6px;font-size:13px"><span style="color:var(--accent);font-weight:700">${wod.type==='EMOM'?`${i+1}분차:`:`${i+1}.`}</span>${ex}</div>`).join('')}`;
+  if(!isInd)c.innerHTML+=`<div style="margin-top:8px;background:var(--card2);border-radius:7px;padding:6px 8px;font-size:11px;color:var(--muted)">👥 참여 팀원: ${S.user?.members?.join(', ')}</div>`;
+  wrap.appendChild(c);
+  // 시뮬레이션 버튼
+  wrap.appendChild(mkBtn('btn-b','margin-bottom:8px;font-size:13px;padding:12px;display:flex;align-items:center;justify-content:center;gap:5px',
+    '🎬 시뮬레이션으로 미리보기',
+    ()=>setState({screen:'wodSim',adminWodSimId:S.user?.selectedWodId,simData:S.simData||null,simSlide:S.simSlide||0,simPlaying:false,simFromStudent:true})));
+  wrap.appendChild(mkBtn('btn-p','font-size:16px;padding:15px','▶ 운동 시작!',startCountdown));
+  return wrap;
+}
+
+let cdInt=null, workInt=null;
+
+function startCountdown(){
+  clearInterval(cdInt);
+  setState({wPhase:'countdown',wCountdown:10});
+  cdInt=setInterval(()=>{
+    if(S.wCountdown<=1){
+      clearInterval(cdInt);
+      const wod=getActiveWod();
+      const tl=wod.timeLimit||(wod.timeLimitMin||10)*60+(wod.timeLimitSec||0);
+      setState({wPhase:'working',aTimeLeft:tl,aSets:0,aRunning:true,aDone:false,aCheckLogs:[],aCooldown:0,aExCooldown:10,aCurExIdx:0,aExLog:[],fElapsed:0,fRunning:true,fDone:false,fSets:0,fSetLogs:[],fCurExIdx:0,fExLog:[],fExCooldown:10,eTimeLeft:60,eRound:1,eRunning:true,eDone:false,eExIdx:0});
+      startWorkTimer();
+      return;
+    }
+    S.wCountdown--; render();
+  },1000);
+}
+
+function buildWorkoutCountdown(){
+  const wrap=mkDiv('','min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;background:var(--bg);padding:20px');
+  wrap.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px;display:flex;align-items:center;gap:5px;position:absolute;top:18px;left:18px',ic.back+' 취소',()=>{ clearInterval(cdInt); clearInterval(workInt); setState({screen:'main',wPhase:'ready'}); }));
+  const inner=mkDiv('','display:flex;flex-direction:column;align-items:center;gap:13px');
+  inner.innerHTML=`<div style="color:var(--muted);font-size:15px;font-weight:600">준비하세요!</div>
+    <div class="pulse tf" style="font-size:100px;color:var(--accent);line-height:1">${S.wCountdown}</div>
+    <div style="color:var(--muted);font-size:12px">초 후 시작</div>`;
+  wrap.appendChild(inner);
+  wrap.style.position='relative';
+  return wrap;
+}
+
+function startWorkTimer(){
+  clearInterval(workInt);
+  const wod=getActiveWod();
+  if(wod.type==='AMRAP'){
+    workInt=setInterval(()=>{
+      if(S.aCooldown>0)S.aCooldown--;
+      if(S.aExCooldown>0)S.aExCooldown--;
+      if(S.aTimeLeft<=1){ clearInterval(workInt); setState({aTimeLeft:0,aRunning:false,aDone:true}); return; }
+      S.aTimeLeft--; render();
+    },1000);
+  } else if(wod.type==='EMOM'){
+    // EMOM: 매 분(60초)마다 다음 운동으로
+    const exercises=wod.exercises||[];
+    const totalRounds=wod.emomRounds||exercises.length;
+    workInt=setInterval(()=>{
+      if(S.eTimeLeft<=1){
+        // 1분 종료
+        const nextEx=S.eExIdx+1;
+        if(nextEx>=totalRounds){
+          clearInterval(workInt);
+          setState({eTimeLeft:0,eRunning:false,eDone:true});
+          return;
+        }
+        S.eExIdx=nextEx;
+        S.eRound=nextEx+1;
+        S.eTimeLeft=60;
+        render();
+        return;
+      }
+      S.eTimeLeft--; render();
+    },1000);
+  } else {
+    workInt=setInterval(()=>{
+      S.fElapsed++;
+      if(S.fExCooldown>0) S.fExCooldown--;
+      render();
+    },1000);
+  }
+}
+
+// ── AMRAP ──
+function buildAmrap(){
+  const wod=getActiveWod();
+  const exercises=wod.exercises||[];
+  const tl=wod.timeLimit||(wod.timeLimitMin||10)*60+(wod.timeLimitSec||0);
+  const curEx=exercises[S.aCurExIdx%exercises.length]||'';
+  const nextEx=exercises[(S.aCurExIdx+1)%exercises.length]||'';
+  const isLast=(S.aCurExIdx%exercises.length)===exercises.length-1;
+  const wrap=mkDiv('','min-height:100vh;display:flex;flex-direction:column;padding:13px;background:var(--bg)');
+
+  if(S.aDone){
+    wrap.innerHTML=`<div class="tf" style="font-size:28px;color:var(--accent);text-align:center;margin-top:45px">운동 종료!</div>
+      <div style="font-size:64px;font-weight:900;text-align:center;margin:14px 0">${S.aSets}</div>
+      <div style="color:var(--muted);font-size:14px;text-align:center;margin-bottom:22px">완료 세트</div>`;
+    wrap.appendChild(mkBtn('btn-p','','기록 저장하기 →',()=>{ clearInterval(workInt); setState({screen:'saveRecord',srSets:S.aSets,srReps:0,aChk1:false,aChk2:false}); }));
+    return wrap;
+  }
+
+  const hdr=mkDiv('','display:flex;align-items:center;margin-bottom:8px');
+  const backBtn=mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px',ic.back,()=>{ clearInterval(cdInt); clearInterval(workInt); setState({screen:'main',wPhase:'ready'}); });
+  hdr.appendChild(backBtn);
+  hdr.appendChild(mkDiv('tf','flex:1;text-align:center;font-size:15px',wod.title));
+  hdr.appendChild(mkDiv('','font-size:13px;font-weight:700;color:var(--accent)',S.aSets+'세트'));
+  wrap.appendChild(hdr);
+
+  // 타이머
+  const prog=tl>0?1-S.aTimeLeft/tl:0;
+  const circ=2*Math.PI*60;
+  const timerRow=mkDiv('','display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:10px');
+  timerRow.innerHTML=`<svg width="130" height="130" style="transform:rotate(-90deg)">
+    <circle cx="65" cy="65" r="60" fill="none" stroke="var(--border)" stroke-width="6"/>
+    <circle cx="65" cy="65" r="60" fill="none" stroke="var(--accent)" stroke-width="6"
+      stroke-dasharray="${circ}" stroke-dashoffset="${circ*(1-prog)}" stroke-linecap="round" style="transition:stroke-dashoffset .5s linear"/>
+  </svg>`;
+  const timerInner=mkDiv('','position:absolute;text-align:center');
+  timerInner.innerHTML=`<div class="tf" style="font-size:30px">${fmtTime(S.aTimeLeft)}</div><div style="color:var(--muted);font-size:9px">남은 시간</div>`;
+  const timerWrap=mkDiv('','position:relative;display:flex;align-items:center;justify-content:center');
+  timerWrap.appendChild(timerRow);
+  timerWrap.appendChild(timerInner);
+  wrap.appendChild(timerWrap);
+
+  // 현재 운동 크게 표시
+  wrap.appendChild(mkDiv('ex-big','',`<div style="color:var(--muted);font-size:11px;margin-bottom:4px">현재 운동 (${S.aCurExIdx%exercises.length+1}/${exercises.length})</div><div style="font-size:22px;font-weight:900;color:var(--accent)">${curEx}</div>`));
+  wrap.appendChild(mkDiv('ex-next','',`<div style="color:var(--muted);font-size:10px;margin-bottom:2px">다음 운동</div><div style="font-size:15px;font-weight:700">${nextEx}</div>`));
+
+  // 다음 운동 버튼
+  const canNextEx=S.aExCooldown<=0&&S.aRunning;
+  const nextBtn=mkBtn(canNextEx?'btn-b':'btn-s','margin-bottom:7px;display:flex;align-items:center;justify-content:center;gap:6px',
+    canNextEx?ic.next+` 다음 운동`:`⏳ 다음 운동 (${S.aExCooldown}초 후 활성화)`,
+    canNextEx?()=>{
+      const ex=exercises[S.aCurExIdx%exercises.length];
+      S.aExLog=[...S.aExLog,{exerciseIndex:S.aCurExIdx%exercises.length,exerciseName:ex,elapsed:tl-S.aTimeLeft,createdAt:new Date().toISOString()}];
+      S.aCurExIdx++;
+      S.aExCooldown=10;
+      render();
+    }:null);
+  if(!canNextEx)nextBtn.disabled=true;
+  wrap.appendChild(nextBtn);
+
+  // 세트 완료 버튼 (길게 누르기, 마지막 운동일 때만)
+  if(isLast){
+    const canCheck=S.aCooldown<=0&&S.aRunning;
+    const hbtn=document.createElement('button');
+    hbtn.className='hbtn';
+    hbtn.style.cssText='background:linear-gradient(135deg,var(--green),#16a34a);color:#fff;font-size:14px;margin-bottom:7px';
+    hbtn.disabled=!canCheck;
+    if(S.aCooldown>0){
+      hbtn.innerHTML=`<span style="font-size:12px;opacity:.7">다음 체크까지 ${S.aCooldown}초</span>`;
+    } else {
+      hbtn.innerHTML=`<div class="hprog" id="hprog" style="width:0%"></div><span style="position:relative;z-index:1">1초 길게 눌러 세트 완료</span><span style="position:relative;z-index:1;font-size:10px;opacity:.7" id="hpct"></span>`;
+    }
+    let holdProg=0,holdAnim=null,holdStart=null;
+    function startHold(){
+      if(!canCheck)return;
+      holdStart=Date.now();holdProg=0;
+      const pe=document.getElementById('hprog');const pce=document.getElementById('hpct');
+      holdAnim=setInterval(()=>{
+        const pct=Math.min(100,Math.floor((Date.now()-holdStart)/10));
+        holdProg=pct;
+        if(pe)pe.style.width=pct+'%';
+        if(pce)pce.textContent=pct<100?`누르는 중... ${pct}%`:'✅ 완료!';
+        if(pct>=100){clearInterval(holdAnim);completeAmrapSet();}
+      },30);
+    }
+    function endHold(){
+      clearInterval(holdAnim);
+      if(holdProg<100){const p=document.getElementById('hprog');if(p)p.style.width='0%';const pc=document.getElementById('hpct');if(pc)pc.textContent='';render();}
+    }
+    hbtn.addEventListener('mousedown',startHold);hbtn.addEventListener('mouseup',endHold);hbtn.addEventListener('mouseleave',endHold);
+    hbtn.addEventListener('touchstart',e=>{e.preventDefault();startHold();},{passive:false});hbtn.addEventListener('touchend',endHold);
+    wrap.appendChild(hbtn);
+  }
+
+  const ctrl=mkDiv('','display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:7px');
+  ctrl.appendChild(mkBtn('btn-s','',S.aRunning?'⏸ 일시정지':'▶ 재시작',()=>{
+    if(S.aRunning){clearInterval(workInt);S.aRunning=false;}else{S.aRunning=true;startWorkTimer();}render();
+  }));
+  ctrl.appendChild(mkBtn('btn-s','',ic.refresh+' 리셋',()=>{ clearInterval(workInt);const wod2=getActiveWod();const tl2=wod2.timeLimit||(wod2.timeLimitMin||10)*60+(wod2.timeLimitSec||0);setState({aTimeLeft:tl2,aSets:0,aRunning:false,aDone:false,aCheckLogs:[],aCooldown:0,aCurExIdx:0,aExLog:[]}); }));
+  wrap.appendChild(ctrl);
+  // 기록 저장은 운동 종료(aDone) 후에만 가능 - 종료 화면에서 버튼 표시
+  return wrap;
+}
+
+function completeAmrapSet(){
+  const wod=getActiveWod();
+  const tl=wod.timeLimit||(wod.timeLimitMin||10)*60+(wod.timeLimitSec||0);
+  const elapsed=tl-S.aTimeLeft;
+  const prevLog=S.aCheckLogs[S.aCheckLogs.length-1]||null;
+  const abnormal=prevLog&&(elapsed-prevLog.elapsed)<20;
+  S.aSets++;
+  S.aCheckLogs=[...S.aCheckLogs,{set:S.aSets,elapsed,timeLeft:S.aTimeLeft,createdAt:new Date().toISOString(),abnormal}];
+  S.aCooldown=20;
+  S.aExCooldown=10;
+  S.aCurExIdx=0; // 다음 세트 첫 운동으로
+  showToast(abnormal?'⚠️ 너무 빠른 체크!':'✅ 세트 완료!',abnormal?'error':'success');
+}
+
+// ── EMOM ──
+function buildEmom(){
+  const wod=getActiveWod();
+  const exercises=wod.exercises||[];
+  const totalRounds=wod.emomRounds||exercises.length;
+  const curExIdx=S.eExIdx%exercises.length;
+  const nextExIdx=(S.eExIdx+1)%exercises.length;
+  const curEx=exercises[curExIdx]||'';
+  const nextEx=exercises[nextExIdx]||'';
+  const wrap=mkDiv('','min-height:100vh;display:flex;flex-direction:column;padding:13px;background:var(--bg)');
+
+  if(S.eDone){
+    wrap.innerHTML=`<div class="tf" style="font-size:28px;color:var(--accent);text-align:center;margin-top:45px">🎉 완료!</div>
+      <div style="font-size:18px;font-weight:700;text-align:center;margin:10px 0;color:var(--muted)">${totalRounds}분 EMOM 종료!</div>
+      <div style="text-align:center;color:var(--muted);font-size:13px;margin-bottom:24px">${exercises.length}가지 운동을 모두 완료했어요 💪</div>`;
+    wrap.appendChild(mkBtn('btn-p','','기록 저장하기 →',()=>{ clearInterval(workInt); setState({screen:'saveRecord',srSets:totalRounds,srReps:0,srTimeMin:0,srTimeSec:0,aChk1:false,aChk2:false}); }));
+    return wrap;
+  }
+
+  const hdr=mkDiv('','display:flex;align-items:center;margin-bottom:8px');
+  hdr.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px',ic.back,()=>{ clearInterval(cdInt); clearInterval(workInt); setState({screen:'main',wPhase:'ready'}); }));
+  hdr.appendChild(mkDiv('tf','flex:1;text-align:center;font-size:15px',wod.title));
+  hdr.appendChild(mkDiv('','font-size:13px;font-weight:700;color:var(--accent)',`${S.eRound}/${totalRounds}분`));
+  wrap.appendChild(hdr);
+
+  // 원형 타이머
+  const prog=S.eTimeLeft/60;
+  const circ=2*Math.PI*60;
+  const urgentColor=S.eTimeLeft<=10?'#ef4444':'var(--accent)';
+  const timerRow=mkDiv('','display:flex;align-items:center;justify-content:center;margin-bottom:14px');
+  timerRow.innerHTML=`<svg width="130" height="130" style="transform:rotate(-90deg)">
+    <circle cx="65" cy="65" r="60" fill="none" stroke="var(--border)" stroke-width="6"/>
+    <circle cx="65" cy="65" r="60" fill="none" stroke="${urgentColor}" stroke-width="6"
+      stroke-dasharray="${circ}" stroke-dashoffset="${circ*(1-prog)}" stroke-linecap="round" style="transition:stroke-dashoffset .5s linear"/>
+  </svg>`;
+  const timerInner=mkDiv('','position:absolute;text-align:center');
+  timerInner.innerHTML=`<div class="tf" style="font-size:30px;color:${urgentColor}">${S.eTimeLeft}</div><div style="color:var(--muted);font-size:9px">초 남음</div>`;
+  const timerWrap=mkDiv('','position:relative;display:flex;align-items:center;justify-content:center');
+  timerWrap.appendChild(timerRow);
+  timerWrap.appendChild(timerInner);
+  wrap.appendChild(timerWrap);
+
+  // 지금 할 운동
+  const exCard=mkDiv('','background:var(--card);border-radius:16px;padding:18px;margin-bottom:10px;border:2px solid var(--accent);text-align:center');
+  exCard.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">지금 — ${S.eRound}분차</div>
+    <div class="tf" style="font-size:26px;color:var(--text);font-weight:900">${curEx}</div>
+    <div style="margin-top:8px;font-size:12px;color:var(--muted)">1분 안에 완료하고 쉬세요!</div>`;
+  wrap.appendChild(exCard);
+
+  // 다음 운동 예고 (마지막 아닐 때만)
+  if(S.eRound<totalRounds){
+    const nextCard=mkDiv('','background:var(--card2);border-radius:12px;padding:12px;text-align:center;margin-bottom:10px');
+    nextCard.innerHTML=`<div style="font-size:10px;color:var(--muted);margin-bottom:4px">다음 — ${S.eRound+1}분차</div>
+      <div style="font-size:16px;font-weight:700;color:var(--muted)">${nextEx}</div>`;
+    wrap.appendChild(nextCard);
+  }
+
+  // 진행 바
+  const prog2=mkDiv('','background:var(--border);border-radius:99px;height:6px;margin-top:10px;overflow:hidden');
+  const progFill=mkDiv('','background:var(--accent);border-radius:99px;height:100%;transition:width .5s',`width:${(S.eRound-1)/totalRounds*100}%`);
+  prog2.appendChild(progFill);
+  wrap.appendChild(mkDiv('','font-size:11px;color:var(--muted);text-align:center;margin-top:8px',`${S.eRound}/${totalRounds} 라운드`));
+  wrap.appendChild(prog2);
+
+  // 일시정지/재시작
+  const ctrl=mkDiv('','display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px');
+  ctrl.appendChild(mkBtn('btn-s','',S.eRunning?'⏸ 일시정지':'▶ 재시작',()=>{
+    if(S.eRunning){clearInterval(workInt);S.eRunning=false;}
+    else{S.eRunning=true;startWorkTimer();}
+    render();
+  }));
+  ctrl.appendChild(mkBtn('btn-s','',ic.refresh+' 리셋',()=>{
+    clearInterval(workInt);
+    setState({eTimeLeft:60,eRound:1,eRunning:false,eDone:false,eExIdx:0});
+  }));
+  wrap.appendChild(ctrl);
+
+  return wrap;
+}
+
+// ── For Time ──
+function buildForTime(){
+  const wod=getActiveWod();
+  const exercises=wod.exercises||[];
+  const targetSets=wod.targetSets||3;
+  const curEx=exercises[S.fCurExIdx%exercises.length]||'';
+  const nextEx=exercises[(S.fCurExIdx+1)%exercises.length]||'';
+  const isLastEx=(S.fCurExIdx%exercises.length)===exercises.length-1;
+  const wrap=mkDiv('','min-height:100vh;display:flex;flex-direction:column;padding:13px;background:var(--bg)');
+
+  const hdr=mkDiv('','display:flex;align-items:center;margin-bottom:8px');
+  hdr.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px',ic.back,()=>{ clearInterval(cdInt); clearInterval(workInt); setState({screen:'main',wPhase:'ready'}); }));
+  hdr.appendChild(mkDiv('tf','flex:1;text-align:center;font-size:15px',wod.title));
+  wrap.appendChild(hdr);
+
+  // 진행 상황
+  const progCard=mkDiv('','background:var(--card2);border-radius:12px;padding:10px 14px;margin-bottom:9px;text-align:center');
+  progCard.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:4px">세트 진행</div>
+    <div style="font-size:26px;font-weight:900;color:var(--blue)">${S.fSets}<span style="font-size:14px;color:var(--muted)"> / ${targetSets}</span></div>
+    ${S.fDone?`<div style="color:var(--green);font-weight:700;font-size:12px;margin-top:2px">✅ 완료!</div>`:`<div style="font-size:11px;color:var(--muted);margin-top:2px">현재 ${S.fSets+1}세트 수행 중</div>`}`;
+  wrap.appendChild(progCard);
+
+  // 타이머
+  const timerCard=mkDiv('','text-align:center;margin-bottom:9px');
+  timerCard.innerHTML=`<div class="tf ${S.fRunning&&!S.fDone?'pulse':''}" style="font-size:52px;color:var(--blue)">${fmtTime(S.fElapsed)}</div><div style="color:var(--muted);font-size:10px">경과 시간</div>`;
+  wrap.appendChild(timerCard);
+
+  if(!S.fDone){
+    // 현재 운동 크게
+    wrap.appendChild(mkDiv('ex-big','border-color:var(--blue)',`<div style="color:var(--muted);font-size:11px;margin-bottom:4px">현재 운동 (${S.fCurExIdx%exercises.length+1}/${exercises.length})</div><div style="font-size:22px;font-weight:900;color:var(--blue)">${curEx}</div>`));
+    wrap.appendChild(mkDiv('ex-next','',`<div style="color:var(--muted);font-size:10px;margin-bottom:2px">다음 운동</div><div style="font-size:14px;font-weight:700">${nextEx}</div>`));
+
+    // 다음 운동 버튼
+    if(!isLastEx){
+      const canNext=S.fExCooldown<=0;
+      const nextBtn=mkBtn(canNext?'btn-b':'btn-s',`margin-bottom:7px;display:flex;align-items:center;justify-content:center;gap:5px`,
+        canNext?ic.next+' 다음 운동':`⏳ 다음 운동 (${S.fExCooldown}초 후 활성화)`,
+        canNext?()=>{
+          const ex=exercises[S.fCurExIdx%exercises.length];
+          S.fExLog=[...S.fExLog,{exerciseIndex:S.fCurExIdx%exercises.length,exerciseName:ex,elapsed:S.fElapsed,createdAt:new Date().toISOString()}];
+          S.fCurExIdx=S.fCurExIdx+1;
+          S.fExCooldown=10;
+          render();
+        }:null);
+      if(!canNext)nextBtn.disabled=true;
+      wrap.appendChild(nextBtn);
+    } else {
+      // 세트 완료 버튼
+      const canComplete=S.fExCooldown<=0;
+      const completeBtn=mkBtn(canComplete?'btn-g':'btn-s',`margin-bottom:7px`,
+        canComplete?ic.check+` 세트 완료 (${S.fSets+1}/${targetSets})`:`⏳ 세트 완료 (${S.fExCooldown}초 후 활성화)`,
+        canComplete?()=>{
+          const ex=exercises[S.fCurExIdx%exercises.length];
+          S.fExLog=[...S.fExLog,{exerciseIndex:S.fCurExIdx%exercises.length,exerciseName:ex,elapsed:S.fElapsed,createdAt:new Date().toISOString()}];
+          S.fSetLogs=[...S.fSetLogs,{set:S.fSets+1,elapsed:S.fElapsed,createdAt:new Date().toISOString()}];
+          S.fSets=S.fSets+1;
+          S.fCurExIdx=0;
+          S.fExCooldown=10;
+          if(S.fSets>=targetSets){
+            clearInterval(workInt);
+            S.fRunning=false;
+            S.fDone=true;
+          }
+          render();
+        }:null);
+      if(!canComplete)completeBtn.disabled=true;
+      wrap.appendChild(completeBtn);
+      const canCancelSet=S.fSets>0;
+      const cancelBtn=mkBtn(canCancelSet?'btn-s':'btn-s','margin-bottom:7px',canCancelSet?`↩ 이전 세트 취소 (${S.fSets}/${targetSets})세트로 되돌리기`:'↩ 이전 세트 취소 (완료된 세트 없음)',()=>{
+        if(S.fSets>0){S.fSets--;S.fSetLogs=S.fSetLogs.slice(0,-1);S.fCurExIdx=0;render();}
+      });
+      if(!canCancelSet)cancelBtn.disabled=true;
+      cancelBtn.style.opacity=canCancelSet?'1':'0.4';
+      wrap.appendChild(cancelBtn);
+    }
+  } else {
+    wrap.appendChild(mkBtn('btn-p','margin-bottom:7px','기록 저장하기 →',()=>{ clearInterval(workInt); const m=Math.floor(S.fElapsed/60),s=S.fElapsed%60; setState({screen:'saveRecord',srTimeMin:m,srTimeSec:s,aChk1:false,aChk2:false}); }));
+  }
+
+  const ctrl=mkDiv('','display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:7px');
+  ctrl.appendChild(mkBtn('btn-s','',S.fRunning?'⏸ 정지':'▶ 재시작',()=>{
+    if(S.fRunning){clearInterval(workInt);S.fRunning=false;}else{S.fRunning=true;startWorkTimer();}render();
+  }));
+  ctrl.appendChild(mkBtn('btn-s','',ic.refresh+' 리셋',()=>{ clearInterval(workInt);setState({fElapsed:0,fRunning:false,fDone:false,fSets:0,fSetLogs:[],fCurExIdx:0,fExLog:[]}); }));
+  wrap.appendChild(ctrl);
+  return wrap;
+}
+
+// ═══════════════════════════════════════════
+// SAVE RECORD
+// ═══════════════════════════════════════════
+function buildSaveRecord(){
+  const wod=getActiveWod();
+  const isInd=S.user?.mode==='individual';
+  const isAmrap=wod.type==='AMRAP';
+  const isEmom=wod.type==='EMOM';
+  const wrap=mkDiv('','min-height:100vh;padding:18px;display:flex;flex-direction:column;background:var(--bg)');
+
+  const backBtn=mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px;display:flex;align-items:center;gap:5px;margin-bottom:13px',ic.back+' 돌아가기',()=>{
+    setState({screen:'workout',wPhase:'working'});
+    // 타이머가 멈춰있으면 재시작
+    const wod=getActiveWod();
+    if(wod.type==='AMRAP'&&S.aRunning) startWorkTimer();
+    else if(wod.type==='EMOM'&&S.eRunning) startWorkTimer();
+    else if(wod.type==='ForTime'&&S.fRunning) startWorkTimer();
+  });
+  wrap.appendChild(backBtn);
+  wrap.appendChild(mkDiv('','',`<div class="tf" style="font-size:21px;color:var(--accent);margin-bottom:2px">${isInd?'기록 저장':'우리 팀 기록 저장'}</div><div style="color:var(--muted);font-size:11px;margin-bottom:12px">${wod.title} · ${wod.type}</div>`));
+
+  const c=mkDiv('card','margin-bottom:11px');
+  if(isAmrap){
+    c.innerHTML=`<div style="color:var(--muted);font-size:11px;margin-bottom:6px">완료 세트 수</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <button class="btn-s" style="width:44px;height:44px;border-radius:11px" onclick="S.srSets=Math.max(0,S.srSets-1);render()">${ic.minus}</button>
+        <div class="tf" style="flex:1;text-align:center;font-size:40px;color:var(--accent)">${S.srSets}</div>
+        <button class="btn-g" style="width:44px;height:44px;border-radius:11px" onclick="S.srSets++;render()">${ic.plus}</button>
+      </div>
+      <div style="color:var(--muted);font-size:11px;margin-bottom:6px">추가 반복 횟수</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="btn-s" style="width:44px;height:44px;border-radius:11px" onclick="S.srReps=Math.max(0,S.srReps-1);render()">${ic.minus}</button>
+        <div class="tf" style="flex:1;text-align:center;font-size:40px">${S.srReps}</div>
+        <button class="btn-g" style="width:44px;height:44px;border-radius:11px" onclick="S.srReps++;render()">${ic.plus}</button>
+      </div>`;
+    if(S.aCheckLogs.length>0){
+      const abnCount=S.aCheckLogs.filter(l=>l.abnormal).length;
+      c.innerHTML+=`<div style="margin-top:8px;background:var(--card2);border-radius:7px;padding:6px 8px;font-size:10px">
+        <div style="font-weight:700;margin-bottom:2px">세트 로그${abnCount>0?`<span style="color:var(--red);margin-left:4px">⚠️ 비정상 ${abnCount}건</span>`:''}</div>
+        ${S.aCheckLogs.map(l=>`<div style="color:${l.abnormal?'var(--red)':'var(--muted)'}">Set ${l.set} · 경과 ${fmtTime(l.elapsed)}${l.abnormal?' ⚠️':''}</div>`).join('')}
+      </div>`;
+    }
+  } else if(isEmom){
+    const totalRounds=wod.emomRounds||wod.exercises.length;
+    c.innerHTML=`<div style="color:var(--muted);font-size:11px;margin-bottom:6px">완료 라운드</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <button class="btn-s" style="width:44px;height:44px;border-radius:11px" onclick="S.srSets=Math.max(0,S.srSets-1);render()">${ic.minus}</button>
+        <div class="tf" style="flex:1;text-align:center;font-size:40px;color:var(--green)">${S.srSets}<span style="font-size:16px;color:var(--muted)"> / ${totalRounds}</span></div>
+        <button class="btn-g" style="width:44px;height:44px;border-radius:11px" onclick="S.srSets=Math.min(${totalRounds},S.srSets+1);render()">${ic.plus}</button>
+      </div>`;
+  } else {
+    c.innerHTML=`<div style="color:var(--muted);font-size:11px;margin-bottom:8px">완료 시간</div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+        <input class="inp" type="number" value="${S.srTimeMin}" style="text-align:center;font-size:26px;font-weight:900" oninput="S.srTimeMin=Math.max(0,+this.value);render()"/>
+        <span style="font-size:18px;font-weight:700">:</span>
+        <input class="inp" type="number" value="${S.srTimeSec}" style="text-align:center;font-size:26px;font-weight:900" oninput="S.srTimeSec=Math.min(59,Math.max(0,+this.value));render()"/>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:8px"><div style="flex:1;text-align:center;color:var(--muted);font-size:10px">분</div><div style="width:14px"></div><div style="flex:1;text-align:center;color:var(--muted);font-size:10px">초</div></div>`;
+    if(S.fSetLogs.length>0){
+      c.innerHTML+=`<div style="background:var(--card2);border-radius:7px;padding:6px 8px;font-size:10px;margin-top:4px">
+        <div style="font-weight:700;margin-bottom:2px">세트 로그 (${S.fSetLogs.length}/${wod.targetSets}세트)</div>
+        ${S.fSetLogs.map(l=>`<div style="color:var(--muted)">Set ${l.set} · ${fmtTime(l.elapsed)}</div>`).join('')}
+      </div>`;
+    }
+  }
+  wrap.appendChild(c);
+
+  const chkCard=mkDiv('card','margin-bottom:11px');
+  chkCard.innerHTML=`<div style="font-weight:700;font-size:12px;margin-bottom:6px">📋 확인 사항</div>`;
+  const checks=isInd
+    ?[['aChk1','본인이 실제 수행한 기록입니다.'],['aChk2','동작을 정확히 수행하려고 노력했습니다.']]
+    :[['aChk1','팀원 또는 기록자가 동작 수행을 확인했습니다.'],['aChk2','허위 기록이 아니며 실제 수행한 기록입니다.']];
+  checks.forEach(([key,label])=>{
+    const row=mkDiv('check-row','');
+    const cb=document.createElement('input');cb.type='checkbox';cb.checked=S[key];
+    cb.onchange=e=>{S[key]=e.target.checked;render();};
+    row.appendChild(cb);row.appendChild(mkDiv('','font-size:12px;line-height:1.4',label));
+    chkCard.appendChild(row);
+  });
+  wrap.appendChild(chkCard);
+
+  const saveBtn=mkBtn('btn-p','margin-top:auto',`💾 ${isInd?'기록 저장':'우리 팀 기록 저장'}`,doSaveRecord);
+  if(!S.aChk1||!S.aChk2)saveBtn.disabled=true;
+  wrap.appendChild(saveBtn);
+  return wrap;
+}
+
+function doSaveRecord(){
+  const wod=getActiveWod();
+  const isInd=S.user?.mode==='individual';
+  const teacher=findTeacher(S.user?.teacherId);
+  const rec={
+    id:Date.now().toString(),
+    date:new Date().toISOString(),
+    class:S.user?.class,
+    team:S.user?.team||'개인전',
+    name:isInd?S.user?.name:'',
+    members:S.user?.members||[],
+    memberCount:S.user?.members?.length||1,
+    mode:isInd?'individual':'team',
+    teacherId:S.user?.teacherId,
+    teacherName:teacher?.name||'',
+    wodTitle:wod.title,
+    wodType:wod.type,
+    ...(wod.type==='AMRAP'
+      ?{sets:S.srSets,reps:S.srReps,checkLogs:[...S.aCheckLogs],completedExercisesLog:[...S.aExLog]}
+      :wod.type==='EMOM'
+      ?{time:(S.eRound-1)*60+(60-S.eTimeLeft),sets:S.srSets,completedExercisesLog:[]}
+      :{time:S.srTimeMin*60+S.srTimeSec,targetSets:wod.targetSets,completedSets:S.fSets,forTimeSetLogs:[...S.fSetLogs],completedExercisesLog:[...S.fExLog]}
+    ),
+  };
+  S.records=[rec,...S.records];
+  fbSaveRecord(rec); // Firebase 동기화
+  showToast(isInd?'기록 저장 완료! 💪':'우리 팀 기록 저장 완료! 💪');
+  setState({screen:'saved'});
+}
+
+function buildSaved(){
+  const isInd=S.user?.mode==='individual';
+  const wrap=mkDiv('','min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:22px;gap:13px;background:var(--bg)');
+  wrap.innerHTML=`<div style="font-size:64px">💪</div>
+    <div class="tf" style="font-size:24px;color:var(--green)">저장 완료!</div>
+    <div style="color:var(--muted);text-align:center">${isInd?'기록이 저장되었습니다.':'우리 팀 기록이 저장되었습니다.'}</div>`;
+  wrap.appendChild(mkBtn('btn-p','width:100%','🏆 순위 보기',()=>setState({screen:'main',tab:'rank'})));
+  wrap.appendChild(mkBtn('btn-s','margin-top:4px','홈으로',()=>setState({screen:'main',tab:'home'})));
+  return wrap;
+}
+
+// ── 로그인 없이 순위 보기 ──
+function buildRankOnly(){
+  const wrap=mkDiv('','min-height:100vh;background:var(--bg);display:flex;flex-direction:column');
+  const hdr=mkDiv('','background:var(--card);border-bottom:1px solid var(--border);padding:11px 14px;display:flex;align-items:center;gap:10px');
+  hdr.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px',ic.back,()=>setState({screen:'schoolSelect'})));
+  hdr.appendChild(mkDiv('tf','font-size:18px;color:var(--accent)','🏆 순위 보기'));
+  wrap.appendChild(hdr);
+
+  const sc=mkDiv('','padding:14px;overflow-y:auto;flex:1;padding-bottom:30px');
+
+  // 선생님 선택
+  const teachers=getTeachers();
+  if(teachers.length===0){
+    sc.appendChild(mkDiv('','text-align:center;color:var(--muted);padding:40px','등록된 선생님이 없습니다'));
+    wrap.appendChild(sc);return wrap;
+  }
+
+  sc.appendChild(mkDiv('','color:var(--muted);font-size:11px;font-weight:700;margin-bottom:7px','선생님 선택'));
+  const tg=mkDiv('','display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px');
+  teachers.forEach(t=>{
+    tg.appendChild(mkBtn(`chip ${S.rankOnlyTeacherId===t.id?'on':''}`,`padding:11px;font-size:13px`,t.name,()=>{S.rankOnlyTeacherId=t.id;render();}));
+  });
+  sc.appendChild(tg);
+
+  if(!S.rankOnlyTeacherId){wrap.appendChild(sc);return wrap;}
+
+  const today=new Date().toISOString().slice(0,10);
+  const recs=S.records.filter(r=>r.teacherId===S.rankOnlyTeacherId&&r.date.slice(0,10)===today);
+  // 기록의 실제 wodType 기준으로 정렬 (선생님이 WOD를 바꿔도 이전 기록 정렬이 깨지지 않도록)
+  const wodType=recs.length>0?(recs[0].wodType||'ForTime'):'ForTime';
+  const medals=['🥇','🥈','🥉'];
+
+  // 반 필터
+  sc.appendChild(mkDiv('','color:var(--muted);font-size:11px;font-weight:700;margin-bottom:7px','반 선택 (전체 또는 특정 반)'));
+  const clsRow=mkDiv('','display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px');
+  const allClasses=['전체',...[...new Set(recs.map(r=>r.class))].sort()];
+  allClasses.forEach(c=>{
+    clsRow.appendChild(mkBtn(`chip ${(S.rankOnlyCls||'전체')===c?'on':''}`,`font-size:11px;padding:6px 8px`,c,()=>{S.rankOnlyCls=c;render();}));
+  });
+  sc.appendChild(clsRow);
+
+  let filtered=recs;
+  if(S.rankOnlyCls&&S.rankOnlyCls!=='전체') filtered=recs.filter(r=>r.class===S.rankOnlyCls);
+
+  if(filtered.length===0){
+    sc.appendChild(mkDiv('','text-align:center;color:var(--muted);padding:30px','<div style="font-size:36px">🏋️</div><div style="margin-top:8px">아직 기록이 없습니다</div>'));
+    wrap.appendChild(sc);return wrap;
+  }
+
+  // 순위 정렬 (dedup)
+  const map={};
+  filtered.forEach(r=>{
+    const key=r.mode==='team'?`${r.class}_${r.team}`:`${r.class}_${r.name||getMembers(r)[0]}`;
+    if(!map[key]){map[key]=r;return;}
+    if(wodType==='AMRAP'){if(r.sets>map[key].sets||(r.sets===map[key].sets&&r.reps>map[key].reps))map[key]=r;}
+    else if(wodType==='EMOM'){if((r.sets||0)>(map[key].sets||0))map[key]=r;}
+    else{if(r.time<map[key].time)map[key]=r;}
+  });
+  const data=Object.values(map);
+  if(wodType==='AMRAP')data.sort((a,b)=>b.sets-a.sets||b.reps-a.reps);
+  else if(wodType==='EMOM')data.sort((a,b)=>(b.sets||0)-(a.sets||0));
+  else data.sort((a,b)=>a.time-b.time);
+
+  const wodTitleLabel=recs.length>0?(recs[0].wodTitle||'오늘 WOD'):'오늘 WOD';
+  sc.appendChild(mkDiv('','font-weight:700;font-size:13px;margin-bottom:10px',`${wodTitleLabel} · 오늘 순위 (${data.length}명)`));
+
+  data.forEach((r,i)=>{
+    const rc=mkDiv(`rc ${i<3?'r'+(i+1):''}`,`${i<3?'border-color:var(--gold)':''}`);
+    const name=r.mode==='team'?`${r.class} ${r.team}`:`${r.class} ${r.name||getMembers(r)[0]||''}`;
+    const sub=r.mode==='team'?getMembers(r).join(', '):'';
+    const rankLabel=i<3?medals[i]:(i+1)+'위';
+    rc.innerHTML=`<div style="font-size:${i<3?22:14}px;min-width:30px;text-align:center">${rankLabel}</div>
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:14px">${name}</div>
+        ${sub?`<div style="color:var(--muted);font-size:10px">${sub}</div>`:''}
+      </div>
+      <div style="font-weight:900;font-size:16px;color:${wodType==='AMRAP'?'var(--accent)':wodType==='EMOM'?'var(--green)':'var(--blue)'}">${wodType==='AMRAP'?`${r.sets||0}S+${r.reps||0}`:wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time)}</div>`;
+    sc.appendChild(rc);
+  });
+
+  wrap.appendChild(sc);return wrap;
+}
+
+// ═══════════════════════════════════════════
+// 2학년 체력측정 모드
+// ═══════════════════════════════════════════
+const EXAM_COURSES = [
+  {name:'버피 브로드 점프', desc:'출발선에서 버피 브로드 점프로 골까지 이동', emoji:'💥'},
+  {name:'점프 스쿼트 10회', desc:'끝선에서 점프 스쿼트 10회 실시 (왕복의 시작점)', emoji:'🦵'},
+  {name:'왕복 달리기', desc:'출발선에서 반대편 달리기 후 점프 스쿼트 장소로 복귀', emoji:'🏃'},
+  {name:'모래주머니 2개 왕복', desc:'점프 스쿼트 장소에서 모래주머니 2개 들고 반대편 돌아 복귀', emoji:'🎒'},
+  {name:'워킹 런지', desc:'점프 스쿼트 장소에서 출발지점까지 워킹 런지로 이동 후 도착하면 코스 종료', emoji:'🚶'},
+];
+
+function examKey(){ return schoolKey('exam_records_2학년'); }
+function getExamRecords(){ return stor.get(examKey(),[]); }
+function setExamRecords(recs){ stor.set(examKey(),recs); }
+
+function buildExam(){
+  if('wakeLock' in navigator && !window._wakeLock){
+    navigator.wakeLock.request('screen').then(lock=>{ window._wakeLock=lock; }).catch(()=>{});
+  }
+
+  const wrap=mkDiv('','min-height:100vh;background:var(--bg);display:flex;flex-direction:column');
+  const hdr=mkDiv('','background:var(--card);border-bottom:2px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:10px');
+  hdr.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px',ic.back,()=>{
+    if(window._wakeLock){ window._wakeLock.release(); window._wakeLock=null; }
+    stopExamTimer();
+    S.examPhase='input'; S.examName=''; S.examStartTime=null;
+    S.screen='login'; save(); render();
+  }));
+  hdr.appendChild(mkDiv('tf','font-size:18px;color:var(--purple)','🏃 2학년 체력측정'));
+  wrap.appendChild(hdr);
+
+  // ── INPUT 화면 ──
+  if(S.examPhase==='input'||S.examPhase==='running'||S.examPhase==='done'){
+    const sc=mkDiv('','flex:1;padding:20px;display:flex;flex-direction:column;align-items:center;overflow-y:auto');
+
+    if(S.examPhase==='input'){
+      sc.style.justifyContent='center';
+      sc.appendChild(mkDiv('','font-size:15px;color:var(--muted);margin-bottom:20px;text-align:center','이름과 반을 입력하고 시작하세요!'));
+      sc.appendChild(mkDiv('','font-size:13px;font-weight:700;color:var(--muted);margin-bottom:8px;width:100%;max-width:400px','반 선택'));
+
+      const cls2=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px;width:100%;max-width:400px');
+      ['2-1','2-2','2-3','2-4','2-5','2-6','2-7','2-8','2-9','2-10','2-11','2-12','2-13','2-14','2-15','2-16'].forEach(c=>{
+        const btn=mkBtn(`chip ${S.examCls===c?'on':''}`,`font-size:12px;padding:8px`,c,null);
+        btn.addEventListener('click',()=>{
+          S.examCls=c;
+          // 반 버튼만 갱신 (re-render 없이)
+          cls2.querySelectorAll('button').forEach(b=>b.classList.remove('on'));
+          btn.classList.add('on');
+          if(S.examErr)errDiv.textContent='';
+        });
+        cls2.appendChild(btn);
+      });
+      sc.appendChild(cls2);
+
+      sc.appendChild(mkDiv('','font-size:13px;font-weight:700;color:var(--muted);margin-bottom:8px;width:100%;max-width:400px','이름 입력'));
+      const ni=mkInp('inp',{type:'text',placeholder:'이름을 입력하세요',value:S.examName||''},v=>{S.examName=v;});
+      ni.style.cssText+='width:100%;max-width:400px;font-size:18px;padding:14px;margin-bottom:20px';
+      ni.addEventListener('keydown',e=>{ if(e.key==='Enter') doStartExam(); });
+      sc.appendChild(ni);
+
+      const errDiv=mkDiv('','color:#ef4444;font-size:13px;margin-top:0;margin-bottom:10px;text-align:center',S.examErr||'');
+      sc.appendChild(errDiv);
+
+      const startBtn=mkBtn('','width:100%;max-width:400px;padding:40px 16px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:white;border:none;border-radius:20px;font-size:44px;font-weight:900;cursor:pointer;font-family:"Black Han Sans",sans-serif;letter-spacing:3px;margin-top:10px;min-height:140px','🚀 시작!',null);
+      startBtn.addEventListener('click', doStartExam);
+      sc.appendChild(startBtn);
+      sc.appendChild(mkBtn('btn-s','margin-top:20px;width:100%;max-width:400px','🏆 순위 보기',()=>setState({screen:'examRank'})));
+
+      function doStartExam(){
+        if(!S.examCls){errDiv.textContent='반을 선택해주세요';return;}
+        if(!(S.examName||ni.value).trim()){errDiv.textContent='이름을 입력해주세요';return;}
+        S.examName=(S.examName||ni.value).trim();
+        S.examPhase='running';
+        S.examStartTime=Date.now();
+        S.examErr='';
+        save();
+        // 화면 전체를 running으로 교체
+        const rootEl=document.getElementById('root');
+        rootEl.innerHTML='';
+        rootEl.appendChild(buildExam());
+        startExamTimer();
+      }
+
+    } else if(S.examPhase==='running'){
+      sc.appendChild(mkDiv('','font-size:14px;color:var(--muted);margin-bottom:8px',`${S.examCls} ${S.examName}`));
+      const timerEl=mkDiv('tf','font-size:64px;color:#ea580c;margin-bottom:20px;letter-spacing:-2px',fmtTimeMs((Date.now()-S.examStartTime)/1000));
+      timerEl.id='exam-timer-display';
+      sc.appendChild(timerEl);
+
+      const courseList=mkDiv('','width:100%;max-width:400px;margin-bottom:24px');
+      EXAM_COURSES.forEach((c,i)=>{
+        courseList.innerHTML+=`<div style="display:flex;align-items:center;gap:10px;background:var(--card);border-radius:14px;padding:12px 14px;margin-bottom:6px;border:2px solid var(--border)">
+          <div style="width:28px;height:28px;border-radius:50%;background:#7c3aed;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:white;flex-shrink:0">${i+1}</div>
+          <div style="font-size:14px;color:var(--text);font-weight:700">${c.emoji} ${c.name}</div>
+        </div>`;
+      });
+      sc.appendChild(courseList);
+
+      const doneBtn=document.createElement('button');
+      doneBtn.style.cssText='width:100%;max-width:400px;padding:80px 16px;background:linear-gradient(135deg,#16a34a,#15803d);color:white;border:none;border-radius:20px;font-size:72px;font-weight:900;cursor:pointer;font-family:"Black Han Sans",sans-serif;letter-spacing:3px;min-height:260px;box-shadow:0 8px 30px #16a34a50;touch-action:manipulation';
+      doneBtn.textContent='🏁 완료!';
+      doneBtn.addEventListener('click',()=>{
+        stopExamTimer();
+        const endTime=Date.now();
+        const totalSec=Math.round((endTime-S.examStartTime)/10)/100;
+        const rec={id:Date.now().toString(),name:S.examName,cls:S.examCls,time:totalSec,date:new Date().toISOString(),synced:false};
+        const recs=getExamRecords(); recs.push(rec); setExamRecords(recs);
+        if(window.fbSaveExamRecord){
+          window.fbSaveExamRecord(rec).then(ok=>{
+            if(ok){const up=getExamRecords();const ix=up.findIndex(r=>r.id===rec.id);if(ix>=0){up[ix].synced=true;setExamRecords(up);}}
+          });
+        }
+        S.examPhase='done'; S.examEndTime=endTime; S.examTotalSec=totalSec; S.examResult=rec;
+        save(); // S 직접 변경 시 localStorage 동기화
+        const root2=document.getElementById('root');
+        root2.innerHTML=''; root2.appendChild(buildExam());
+      });
+      sc.appendChild(doneBtn);
+
+    } else if(S.examPhase==='done'){
+      sc.style.justifyContent='center';
+      const sec=S.examTotalSec;
+      sc.appendChild(mkDiv('tf','font-size:28px;color:var(--green);margin-bottom:8px','🏁 완료!'));
+      sc.appendChild(mkDiv('','font-size:16px;color:var(--muted);margin-bottom:16px',`${S.examCls} ${S.examName}`));
+      sc.appendChild(mkDiv('tf','font-size:64px;color:#ea580c;margin-bottom:8px;letter-spacing:-2px',fmtTimeMs(sec)));
+      sc.appendChild(mkDiv('','font-size:14px;color:var(--muted);margin-bottom:24px','총 소요 시간'));
+      const recs=getExamRecords().filter(r=>r.cls===S.examCls).sort((a,b)=>a.time-b.time);
+      const myRank=recs.findIndex(r=>r.id===S.examResult?.id)+1;
+      sc.appendChild(mkDiv('','font-size:15px;font-weight:700;color:var(--purple);margin-bottom:6px',`${S.examCls} 순위: ${myRank}위 / ${recs.length}명`));
+      sc.appendChild(mkBtn('','width:100%;max-width:400px;padding:40px 16px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:white;border:none;border-radius:20px;font-size:44px;font-weight:900;cursor:pointer;font-family:"Black Han Sans",sans-serif;margin-top:20px;margin-bottom:10px;min-height:140px','다음 학생 →',()=>{
+        S.examPhase='input'; S.examName=''; S.examCls=S.examCls; S.examStartTime=null; S.examEndTime=null; S.examErr='';
+        save();
+        const root2=document.getElementById('root'); root2.innerHTML=''; root2.appendChild(buildExam());
+      }));
+      sc.appendChild(mkBtn('btn-s','width:100%;max-width:400px','🏆 전체 순위 보기',()=>{
+        if(window.fbLoadAll) window.fbLoadAll().then(()=>render());
+        setState({screen:'examRank'});
+      }));
+    }
+
+    wrap.appendChild(sc);
+  }
+  return wrap;
+}
+
+function startExamTimer(){
+  stopExamTimer();
+  window._examTimerInt=setInterval(()=>{
+    const el=document.getElementById('exam-timer-display');
+    if(el) el.textContent=fmtTimeMs((Date.now()-S.examStartTime)/1000);
+    else stopExamTimer();
+  },30);
+}
+
+function stopExamTimer(){
+  if(window._examTimerInt){
+    clearInterval(window._examTimerInt);
+    window._examTimerInt=null;
+  }
+}
+
+function buildExamRank(){
+  const wrap=mkDiv('','min-height:100vh;background:var(--bg);display:flex;flex-direction:column');
+  const hdr=mkDiv('','background:var(--card);border-bottom:2px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:10px');
+  hdr.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px',ic.back,()=>setState({screen:'exam',examPhase:'input'})));
+  hdr.appendChild(mkDiv('tf','font-size:18px;color:var(--purple)','🏆 체력측정 순위'));
+  wrap.appendChild(hdr);
+
+  const sc=mkDiv('','padding:16px;overflow-y:auto;flex:1');
+  const recs=getExamRecords();
+
+  if(recs.length===0){
+    sc.appendChild(mkDiv('','text-align:center;padding:40px;color:var(--muted)','아직 기록이 없습니다'));
+    wrap.appendChild(sc);return wrap;
+  }
+
+  // 반 필터
+  const classes=[...new Set(recs.map(r=>r.cls))].sort();
+  const filterRow=mkDiv('','display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px');
+  ['전체',...classes].forEach(c=>{
+    filterRow.appendChild(mkBtn(`chip ${(S.examRankCls||'전체')===c?'on':''}`,`font-size:11px;padding:6px 10px`,c,()=>{S.examRankCls=c;render();}));
+  });
+  sc.appendChild(filterRow);
+
+  const filtered=S.examRankCls&&S.examRankCls!=='전체'?recs.filter(r=>r.cls===S.examRankCls):recs;
+
+  // 동명이인 dedup — 같은 반+이름은 최고기록(최단시간)만
+  const dedupMap={};
+  filtered.forEach(r=>{
+    const key=`${r.cls}_${r.name}`;
+    if(!dedupMap[key]||r.time<dedupMap[key].time) dedupMap[key]=r;
+  });
+  const deduped=Object.values(dedupMap).sort((a,b)=>a.time-b.time);
+
+  const medals=['🥇','🥈','🥉'];
+  deduped.forEach((r,i)=>{
+    const examRankLabel=i<3?medals[i]:(i+1)+'위';
+    const rc=mkDiv('','display:flex;align-items:center;gap:10px;background:var(--card);border-radius:14px;padding:12px 14px;margin-bottom:6px;border:2px solid '+(i<3?'#f59e0b':'var(--border)'));
+    rc.innerHTML=`
+      <div style="font-size:${i<3?22:14}px;min-width:32px;text-align:center">${examRankLabel}</div>
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:14px;color:var(--text)">${r.cls} ${r.name} ${r.synced?'<span style="font-size:9px;color:var(--green)">☁️</span>':'<span style="font-size:9px;color:#f59e0b">⏳</span>'}</div>
+        <div style="font-size:10px;color:#64748b">${new Date(r.date).toLocaleDateString('ko-KR')} · ${fmtTimeMs(r.time)}</div>
+      </div>`;
+    // 삭제 버튼
+    const delBtn=mkBtn('','background:none;border:1px solid var(--red);color:var(--red);border-radius:8px;padding:4px 8px;font-size:11px;flex-shrink:0',ic.trash,()=>{
+      const allRecs=getExamRecords();
+      const newRecs=allRecs.filter(x=>x.id!==r.id);
+      setExamRecords(newRecs);
+      if(window.fbDeleteExamRecord) window.fbDeleteExamRecord(r.id);
+      showToast('기록 삭제됨');
+      render();
+    });
+    rc.appendChild(delBtn);
+    sc.appendChild(rc);
+  });
+
+  sc.appendChild(mkDiv('','font-size:10px;color:#475569;text-align:center;margin-top:6px;margin-bottom:4px',`총 ${deduped.length}명 · 동명이인은 최고기록만 표시`));
+
+  // 동기화 안 된 기록 개수
+  const unsyncedCount=recs.filter(r=>!r.synced).length;
+
+  // 와이파이 연결 시 동기화 버튼
+  if(unsyncedCount>0){
+    const syncBtn=mkBtn('btn-p','margin-top:14px',`☁️ ${unsyncedCount}건 Firebase에 동기화하기`,async(e)=>{
+      const btn=e.currentTarget;
+      btn.disabled=true;
+      btn.textContent='동기화 중... 잠시만요';
+      btn.style.opacity='0.6';
+      try {
+        const allRecs=getExamRecords();
+        let success=0, fail=0;
+        for(const r of allRecs){
+          if(!r.synced){
+            const ok=await window.fbSaveExamRecord(r);
+            if(ok){r.synced=true;success++;}
+            else fail++;
+          }
+        }
+        setExamRecords(allRecs);
+        if(fail===0){
+          showToast(`✅ ${success}건 동기화 완료! 이제 모든 기기에서 볼 수 있어요`);
+        } else {
+          showToast(`⚠️ ${success}건 성공, ${fail}건 실패 — 인터넷 연결 확인 후 다시 시도해주세요`,'error');
+        }
+      } catch(err) {
+        showToast('동기화 실패 — 인터넷 연결을 확인해주세요','error');
+      }
+      render();
+    });
+    sc.appendChild(syncBtn);
+  }
+
+  // 기록 초기화
+  sc.appendChild(mkBtn('btn-d','margin-top:14px','🗑 기록 초기화',()=>{
+    if(confirm('모든 체력측정 기록을 삭제할까요?')){ setExamRecords([]); render(); }
+  }));
+
+  wrap.appendChild(sc);return wrap;
+}
+function buildWodSim(){
+  const tid=S.user?.teacherId||S.lTeacherId||'';
+  const wodList=getWodList(tid);
+  const simId=S.adminWodSimId;
+
+  // _simWodCache가 있으면 바로 사용 (학생이 버튼 눌렀을 때)
+  let wod=_simWodCache||null;
+  if(!wod&&simId) wod=wodList.find(w=>w.id===simId)||null;
+  if(!wod&&S.lWodId) wod=wodList.find(w=>w.id===S.lWodId)||null;
+  if(!wod) wod=getWodForTeacher(tid)||{...DEFAULT_WOD};
+  const tl=wod.timeLimit||(wod.timeLimitMin||10)*60+(wod.timeLimitSec||0);
+  const exercises=wod.exercises||[];
+  const isPlaying2=S.simPlaying||false; // 하단 참조용
+  const simData=S.simData||null;
+  const curSlide=S.simSlide||0;
+
+  const wrap=mkDiv('','min-height:100vh;background:var(--bg);display:flex;flex-direction:column');
+
+  // 헤더
+  const hdr=mkDiv('','background:var(--card);border-bottom:1px solid var(--border);padding:11px 14px;display:flex;align-items:center;gap:8px');
+  hdr.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px',ic.back,()=>{
+    clearInterval(window._simPlayInt);
+    if(S.simFromStudent){
+      setState({screen:'login',lStep:2,simData:null,simSlide:0,simPlaying:false,simFromStudent:false});
+    } else {
+      setState({screen:'admin',adminTab:'wod',simData:null,simSlide:0,simPlaying:false});
+    }
+  }));
+  hdr.appendChild(mkDiv('tf','font-size:15px',`🎬 WOD 시뮬레이션`));
+  wrap.appendChild(hdr);
+
+  const sc=mkDiv('','padding:16px;flex:1;overflow-y:auto');
+
+  // WOD 정보
+  sc.appendChild(mkDiv('card','margin-bottom:14px;border:1px solid #f9731630',
+    `<div style="font-weight:700;font-size:15px;margin-bottom:5px">${wod.title}</div>
+     <div style="display:flex;gap:5px;flex-wrap:wrap">
+       <span class="badge ${wod.type==='AMRAP'?'bo':wod.type==='EMOM'?'bg':'bb'}">${wod.type}</span>
+       ${wod.type==='AMRAP'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${fmtTime(tl)}</span>`:wod.type==='EMOM'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.emomRounds||exercises.length}분</span>`:`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.targetSets}세트</span>`}
+       <span class="badge bg">${exercises.length}가지 운동</span>
+     </div>`));
+
+  if(!simData){
+    // 시작 전 화면
+    sc.appendChild(mkDiv('','text-align:center;padding:20px 0;margin-bottom:14px',
+      `<div style="font-size:48px;margin-bottom:10px">🎬</div>
+       <div style="font-weight:700;font-size:16px;margin-bottom:6px">WOD 시뮬레이션</div>
+       <div style="color:var(--muted);font-size:13px;line-height:1.6">이 WOD의 전체 흐름을<br>슬라이드로 미리 볼 수 있어요!</div>`));
+
+    // 운동 목록 미리보기
+    const prev=mkDiv('card','margin-bottom:14px');
+    prev.innerHTML='<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">포함된 운동</div>';
+    exercises.forEach((ex,i)=>{
+      prev.innerHTML+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;${i<exercises.length-1?'border-bottom:1px solid var(--border)':''}">
+        <div style="width:22px;height:22px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:white">${i+1}</div>
+        <div style="font-size:13px">${ex}</div>
+      </div>`;
+    });
+    sc.appendChild(prev);
+
+    sc.appendChild(mkBtn('btn-p','font-size:16px;padding:16px','🎬 시뮬레이션 보기',()=>{
+      const slides=[];
+      slides.push({type:'intro',emoji:'🏋️',title:wod.title,
+        desc:wod.type==='AMRAP'
+          ?`⏱ ${fmtTime(tl)} 동안 아래 운동들을 최대한 많이 반복하는 운동입니다!`
+          :wod.type==='EMOM'
+          ?`🕐 매 분마다 새 운동! ${wod.emomRounds||exercises.length}분 동안 총 ${exercises.length}가지 운동을 순서대로 합니다!`
+          :`🎯 아래 운동들을 순서대로 ${wod.targetSets}세트 완료하는 운동입니다!`});
+      exercises.forEach((ex,i)=>{
+        const desc=(wod.exerciseDescs||[])[i]||'선생님이 설명을 입력하지 않았습니다.';
+        slides.push({type:'exercise',emoji:'💪',exNum:i+1,exName:ex,desc,tip:`⭐ ${i+1}/${exercises.length}번째 운동`});
+      });
+      slides.push({type:'transition',title:'운동 순서',
+        desc:exercises.map((ex,i)=>`${i+1}. ${ex}`).join('\n')
+          +`\n\n${wod.type==='AMRAP'?`⏱ 위 순서를 ${fmtTime(tl)} 동안 반복!`:wod.type==='EMOM'?`🕐 위 순서로 ${wod.emomRounds||exercises.length}분 EMOM!`:`🎯 위 순서로 ${wod.targetSets}세트 완료!`}`});
+      slides.push({type:'outro',emoji:'🔥',title:'준비됐나요?',desc:'정확한 자세로 최선을 다해보세요! 화이팅! 💪'});
+      S.simData={slides};S.simSlide=0;render();
+    }));
+
+  } else if(simData&&simData.slides){
+    // 슬라이드 화면
+    const slides=simData.slides;
+    const total=slides.length;
+    const slide=slides[curSlide];
+    const isPlaying=S.simPlaying||false;
+
+    // 진행 바
+    sc.appendChild(mkDiv('','background:var(--card2);border-radius:10px;height:6px;margin-bottom:14px;overflow:hidden',
+      `<div style="height:100%;width:${((curSlide+1)/total)*100}%;background:linear-gradient(90deg,var(--accent),var(--yellow));border-radius:10px;transition:width .3s"></div>`));
+    sc.appendChild(mkDiv('','text-align:right;font-size:10px;color:var(--muted);margin-top:-10px;margin-bottom:12px',`${curSlide+1} / ${total}`));
+
+    // 슬라이드 카드 (애니메이션)
+    const slideCard=mkDiv('','background:var(--card);border-radius:20px;padding:20px;margin-bottom:12px;border:2px solid var(--accent);min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;animation:su .3s ease-out');
+
+    // 슬라이드 타입별 표시
+    if(slide.type==='intro'){
+      slideCard.innerHTML=`<div style="font-size:44px;margin-bottom:12px">${slide.emoji||'🏋️'}</div>
+        <div class="tf" style="font-size:22px;color:var(--accent);margin-bottom:8px">${slide.title}</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.7">${slide.desc}</div>`;
+    } else if(slide.type==='exercise'){
+      slideCard.innerHTML=`
+        <div style="background:var(--asoft);border-radius:12px;padding:5px 12px;font-size:11px;color:var(--accent);font-weight:700;margin-bottom:10px">운동 ${slide.exNum} / ${exercises.length}</div>
+        <div style="font-size:36px;margin-bottom:6px">${slide.emoji||'💪'}</div>
+        <div style="font-size:20px;font-weight:900;color:var(--accent);margin-bottom:12px">${slide.exName}</div>
+        <div style="font-size:13px;color:var(--text);line-height:1.8;margin-bottom:10px;text-align:left;white-space:pre-line">${slide.desc}</div>
+        <div style="background:var(--card2);border-radius:10px;padding:8px 14px;font-size:12px;color:var(--yellow)">${slide.tip||''}</div>`;
+    } else if(slide.type==='transition'){
+      slideCard.innerHTML=`<div style="font-size:36px;margin-bottom:10px">➡️</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px">${slide.title}</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.7">${slide.desc}</div>`;
+    } else if(slide.type==='outro'){
+      slideCard.innerHTML=`<div style="font-size:44px;margin-bottom:12px">🔥</div>
+        <div class="tf" style="font-size:22px;color:var(--green);margin-bottom:8px">${slide.title}</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.7">${slide.desc}</div>`;
+    }
+    sc.appendChild(slideCard);
+
+    // 네비게이션
+    const nav=mkDiv('','display:flex;gap:8px;margin-bottom:10px');
+    const prevBtn=mkBtn('btn-s',`flex:1;${curSlide===0?'opacity:.4':''}`,ic.back+' 이전',()=>{
+      if(curSlide>0){clearInterval(window._simPlayInt);S.simPlaying=false;S.simSlide--;render();}
+    });
+    if(curSlide===0)prevBtn.disabled=true;
+    nav.appendChild(prevBtn);
+
+    if(curSlide<total-1){
+      nav.appendChild(mkBtn('btn-p',`flex:2`,isPlaying?'⏸ 일시정지':'▶ 자동재생',()=>{
+        if(isPlaying){
+          clearInterval(window._simPlayInt);S.simPlaying=false;render();
+        } else {
+          S.simPlaying=true;render();
+          window._simPlayInt=setInterval(()=>{
+            if(S.simSlide<S.simData.slides.length-1){S.simSlide++;render();}
+            else{clearInterval(window._simPlayInt);S.simPlaying=false;render();}
+          },3000);
+        }
+      }));
+      nav.appendChild(mkBtn('btn-s',`flex:1`,'다음 '+ic.next,()=>{
+        clearInterval(window._simPlayInt);S.simPlaying=false;S.simSlide++;render();
+      }));
+    } else {
+      nav.appendChild(mkBtn('btn-g',`flex:3`,ic.refresh+' 처음부터',()=>{
+        clearInterval(window._simPlayInt);S.simPlaying=false;S.simSlide=0;render();
+      }));
+    }
+    sc.appendChild(nav);
+
+    // 슬라이드 점
+    const dots=mkDiv('','display:flex;justify-content:center;gap:5px;margin-bottom:12px');
+    slides.forEach((_,i)=>{
+      dots.appendChild(mkDiv('','',`<div style="width:${i===curSlide?16:6}px;height:6px;border-radius:3px;background:${i===curSlide?'var(--accent)':'var(--card2)'};transition:all .3s"></div>`));
+    });
+    sc.appendChild(dots);
+
+  }
+
+  wrap.appendChild(sc);return wrap;
+}
+
+function getExerciseAnim(exName){
+  const name=exName||'';
+  // 달리기
+  if(name.includes('달리기')||name.includes('런')){
+    return `<svg width="120" height="80" viewBox="0 0 120 80" style="overflow:visible">
+      <style>
+        .runner{animation:run 0.6s ease-in-out infinite alternate}
+        @keyframes run{from{transform:translateX(0)}to{transform:translateX(10px)}}
+      </style>
+      <g class="runner" transform="translate(40,10)">
+        <circle cx="20" cy="8" r="7" fill="none" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="20" y1="15" x2="20" y2="38" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="20" y1="22" x2="8" y2="30" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="20" y1="22" x2="32" y2="18" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="20" y1="38" x2="10" y2="52" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="20" y1="38" x2="30" y2="48" stroke="#f97316" stroke-width="2.5"/>
+      </g>
+    </svg>`;
+  }
+  // 스쿼트/점프스쿼트
+  if(name.includes('스쿼트')){
+    return `<svg width="120" height="90" viewBox="0 0 120 90">
+      <style>
+        .sq{animation:squat 0.8s ease-in-out infinite alternate}
+        @keyframes squat{
+          from{transform:translateY(0) scaleY(1)}
+          to{transform:translateY(15px) scaleY(0.75)}
+        }
+      </style>
+      <g class="sq" transform-origin="60 50" transform="translate(60,5)">
+        <circle cx="0" cy="8" r="7" fill="none" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="0" y1="15" x2="0" y2="38" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="0" y1="22" x2="-12" y2="28" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="0" y1="22" x2="12" y2="28" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="0" y1="38" x2="-14" y2="55" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="0" y1="38" x2="14" y2="55" stroke="#f97316" stroke-width="2.5"/>
+      </g>
+    </svg>`;
+  }
+  // 버피/버피테스트
+  if(name.includes('버피')){
+    return `<svg width="140" height="90" viewBox="0 0 140 90">
+      <style>
+        .bp1{animation:burpee1 1.2s ease-in-out infinite}
+        @keyframes burpee1{
+          0%,100%{opacity:1} 50%{opacity:0}
+        }
+        .bp2{animation:burpee2 1.2s ease-in-out infinite}
+        @keyframes burpee2{
+          0%,100%{opacity:0} 50%{opacity:1}
+        }
+      </style>
+      <!-- 서있는 자세 -->
+      <g class="bp1">
+        <circle cx="50" cy="12" r="7" fill="none" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="50" y1="19" x2="50" y2="42" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="50" y1="28" x2="38" y2="36" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="50" y1="28" x2="62" y2="36" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="50" y1="42" x2="42" y2="58" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="50" y1="42" x2="58" y2="58" stroke="#f97316" stroke-width="2.5"/>
+      </g>
+      <!-- 엎드린 자세 -->
+      <g class="bp2">
+        <circle cx="20" cy="60" r="7" fill="none" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="27" y1="60" x2="75" y2="60" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="40" y1="60" x2="35" y2="75" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="40" y1="60" x2="30" y2="50" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="60" y1="60" x2="55" y2="75" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="60" y1="60" x2="65" y2="50" stroke="#f97316" stroke-width="2.5"/>
+      </g>
+    </svg>`;
+  }
+  // 푸시업
+  if(name.includes('푸시업')||name.includes('push')){
+    return `<svg width="140" height="80" viewBox="0 0 140 80">
+      <style>
+        .pu{animation:pushup 0.9s ease-in-out infinite alternate}
+        @keyframes pushup{
+          from{transform:translateY(0)}
+          to{transform:translateY(-12px)}
+        }
+      </style>
+      <g class="pu" transform-origin="70 55">
+        <circle cx="20" cy="48" r="7" fill="none" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="27" y1="48" x2="80" y2="48" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="35" y1="48" x2="30" y2="62" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="35" y1="48" x2="28" y2="38" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="65" y1="48" x2="60" y2="62" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="65" y1="48" x2="72" y2="38" stroke="#f97316" stroke-width="2.5"/>
+      </g>
+    </svg>`;
+  }
+  // 플랭크
+  if(name.includes('플랭크')){
+    return `<svg width="140" height="70" viewBox="0 0 140 70">
+      <circle cx="20" cy="38" r="7" fill="none" stroke="#f97316" stroke-width="2.5"/>
+      <line x1="27" y1="38" x2="85" y2="38" stroke="#f97316" stroke-width="2.5"/>
+      <line x1="35" y1="38" x2="30" y2="54" stroke="#f97316" stroke-width="2.5"/>
+      <line x1="75" y1="38" x2="70" y2="54" stroke="#f97316" stroke-width="2.5"/>
+      <style>.pl{animation:plank 2s ease-in-out infinite alternate}
+      @keyframes plank{from{opacity:1}to{opacity:0.6}}</style>
+      <text x="50" y="20" font-size="10" fill="#94a3b8" class="pl">버텨요!</text>
+    </svg>`;
+  }
+  // 런지
+  if(name.includes('런지')||name.includes('레그')){
+    return `<svg width="120" height="90" viewBox="0 0 120 90">
+      <style>
+        .lu{animation:lunge 0.8s ease-in-out infinite alternate}
+        @keyframes lunge{from{transform:translateY(0)}to{transform:translateY(8px)}}
+      </style>
+      <g class="lu" transform="translate(30,5)">
+        <circle cx="25" cy="8" r="7" fill="none" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="25" y1="15" x2="25" y2="38" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="25" y1="24" x2="13" y2="32" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="25" y1="24" x2="37" y2="32" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="25" y1="38" x2="10" y2="60" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="25" y1="38" x2="40" y2="50" stroke="#f97316" stroke-width="2.5"/>
+        <line x1="40" y1="50" x2="40" y2="68" stroke="#f97316" stroke-width="2.5"/>
+      </g>
+    </svg>`;
+  }
+  // 기본 (알 수 없는 운동)
+  return `<svg width="100" height="80" viewBox="0 0 100 80">
+    <style>
+      .def{animation:bounce 0.7s ease-in-out infinite alternate}
+      @keyframes bounce{from{transform:translateY(0)}to{transform:translateY(-10px)}}
+    </style>
+    <g class="def" transform="translate(30,5)">
+      <circle cx="20" cy="8" r="7" fill="none" stroke="#f97316" stroke-width="2.5"/>
+      <line x1="20" y1="15" x2="20" y2="38" stroke="#f97316" stroke-width="2.5"/>
+      <line x1="20" y1="24" x2="8" y2="32" stroke="#f97316" stroke-width="2.5"/>
+      <line x1="20" y1="24" x2="32" y2="32" stroke="#f97316" stroke-width="2.5"/>
+      <line x1="20" y1="38" x2="12" y2="55" stroke="#f97316" stroke-width="2.5"/>
+      <line x1="20" y1="38" x2="28" y2="55" stroke="#f97316" stroke-width="2.5"/>
+    </g>
+  </svg>`;
+}
+
+
+
+
+// ── RANK ──
+function buildRank(){
+  const wrap=mkDiv('','');
+  const isInd=S.user?.mode==='individual';
+  const today=new Date().toISOString().slice(0,10);
+  const base=S.records.filter(r=>r.date.slice(0,10)===today&&r.teacherId===S.user?.teacherId);
+  const clsRecs=base.filter(r=>r.class===S.user?.class);
+  const medals=['🥇','🥈','🥉'];
+
+  wrap.innerHTML=`<div class="tf" style="font-size:21px;margin-bottom:2px">🏆 ${isInd?'개인 순위':'팀 순위'}</div>
+    <div style="color:var(--muted);font-size:10px;margin-bottom:10px">${fmtFull(new Date().toISOString())}</div>`;
+
+  const tg=mkDiv('','display:flex;gap:5px;margin-bottom:14px');
+  [['class',`${S.user?.class} 순위`],['all','전체 순위']].forEach(([v,l])=>{
+    tg.appendChild(mkBtn(`chip ${S.rankView===v?'on':''}`,`flex:1;font-size:11px;padding:7px 3px`,l,()=>setState({rankView:v})));
+  });
+  wrap.appendChild(tg);
+
+  const src=S.rankView==='class'?clsRecs:base;
+  if(src.length===0){ wrap.appendChild(mkDiv('','text-align:center;color:var(--muted);padding:28px','아직 기록이 없습니다 😅')); return wrap; }
+
+  // WOD별로 그룹핑
+  const wodGroups={};
+  src.forEach(r=>{
+    const key=r.wodTitle||'기타';
+    if(!wodGroups[key])wodGroups[key]=[];
+    wodGroups[key].push(r);
+  });
+
+  Object.entries(wodGroups).forEach(([wodTitle,recs])=>{
+    const wodType=recs[0].wodType;
+
+    // dedup
+    const map={};
+    const filteredRecs=isInd?recs.filter(r=>r.mode==='individual'||!r.mode):recs.filter(r=>r.mode==='team');
+    filteredRecs.forEach(r=>{
+      const key=isInd?`${r.class}_${r.name||getMembers(r)[0]}`:`${r.class}_${r.team}`;
+      if(!map[key]){map[key]=r;return;}
+      if(wodType==='AMRAP'){if(r.sets>map[key].sets||(r.sets===map[key].sets&&r.reps>map[key].reps))map[key]=r;}
+      else if(wodType==='EMOM'){if((r.sets||0)>(map[key].sets||0))map[key]=r;}
+      else{if(r.time<map[key].time)map[key]=r;}
+    });
+    const data=Object.values(map);
+    if(wodType==='AMRAP')data.sort((a,b)=>b.sets-a.sets||b.reps-a.reps||new Date(a.date)-new Date(b.date));
+    else if(wodType==='EMOM')data.sort((a,b)=>(b.sets||0)-(a.sets||0)||new Date(a.date)-new Date(b.date));
+    else data.sort((a,b)=>a.time-b.time||new Date(a.date)-new Date(b.date));
+    if(data.length===0)return;
+
+    // WOD 제목 헤더
+    wrap.appendChild(mkDiv('','background:var(--card);border-radius:12px;padding:10px 13px;margin-bottom:8px;border:1px solid #f9731630',
+      `<div style="font-weight:700;font-size:14px">${wodTitle}</div>
+       <div style="display:flex;gap:4px;margin-top:4px"><span class="badge ${wodType==='AMRAP'?'bo':wodType==='EMOM'?'bg':'bb'}">${wodType}</span></div>`));
+
+    data.forEach((r,i)=>{
+      const label=isInd?(r.name||getMembers(r)[0]||'?'):`${r.class} ${r.team}`;
+      const sub=isInd?r.class:getMembers(r).join(', ');
+      const isMe=isInd?(r.name===S.user?.name&&r.class===S.user?.class):(r.team===S.user?.team&&r.class===S.user?.class);
+      const rankLbl=i<3?medals[i]:(i+1)+'위';
+      const rc=mkDiv(`rc ${i<3?'r'+(i+1):''}`,isMe?'border-color:var(--accent)':'');
+      rc.innerHTML=`<div style="font-size:${i<3?20:14}px;min-width:28px;text-align:center">${rankLbl}</div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:13px">${label}${isMe?`<span style="font-size:9px;color:var(--accent);background:var(--asoft);padding:1px 5px;border-radius:7px;margin-left:4px">${isInd?'나':'우리팀'}</span>`:''}</div>
+          <div style="color:var(--muted);font-size:10px">${sub}</div>
+        </div>
+        <div style="text-align:right;font-weight:700;font-size:15px;color:${wodType==='AMRAP'?'var(--accent)':wodType==='EMOM'?'var(--green)':'var(--blue)'}">
+          ${wodType==='AMRAP'
+            ?`${r.sets||0}S+${r.reps||0}`
+            :wodType==='EMOM'
+            ?`${r.sets||0}R`
+            :(r.time?fmtTime(r.time):'-')}
+        </div>`;
+      wrap.appendChild(rc);
+    });
+    wrap.appendChild(mkDiv('','margin-bottom:10px'));
+  });
+  return wrap;
+}
+
+// ═══════════════════════════════════════════
+// MY RECORD
+// ═══════════════════════════════════════════
+function buildMyRecord(){
+  const wrap=mkDiv('','');
+  const isInd=S.user?.mode==='individual';
+  wrap.innerHTML=`<div class="tf" style="font-size:21px;margin-bottom:2px">${isInd?'📋 내 기록':'📋 팀 참여 기록'}</div>`;
+  if(!isInd){
+    wrap.innerHTML+=`<div style="color:var(--muted);font-size:10px;margin-bottom:7px">팀원 이름 검색</div>`;
+    const si=mkInp('inp',{type:'text',placeholder:'팀원 이름 검색',value:S.mrSearch},v=>{S.mrSearch=v;render();});
+    wrap.appendChild(si);wrap.appendChild(mkDiv('','margin-bottom:9px'));
+  } else {
+    wrap.innerHTML+=`<div style="color:var(--muted);font-size:10px;margin-bottom:11px">${S.user?.name} · ${S.user?.class}</div>`;
+  }
+  let my;
+  if(isInd)my=S.records.filter(r=>(r.name===S.user?.name||getMembers(r).includes(S.user?.name))&&r.class===S.user?.class);
+  else{const search=S.mrSearch.trim();my=search?S.records.filter(r=>getMembers(r).some(m=>m.includes(search))):S.records.filter(r=>r.team===S.user?.team&&r.class===S.user?.class);}
+  if(my.length===0){wrap.appendChild(mkDiv('','text-align:center;color:var(--muted);padding:32px','<div style="font-size:40px">🏋️</div><div style="margin-top:7px">기록이 없습니다</div>'));return wrap;}
+  my.forEach(r=>{
+    const c=mkDiv('card','margin-bottom:8px');
+    c.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+      <div><div style="font-weight:700;font-size:12px">${r.wodTitle}</div><div style="color:var(--muted);font-size:9px">${fmtFull(r.date)} · ${r.class} · ${r.team}</div></div>
+      <span class="badge ${r.wodType==='AMRAP'?'bo':r.wodType==='EMOM'?'bg':'bb'}">${r.wodType}</span>
+    </div>
+    <div style="background:var(--card2);border-radius:7px;padding:6px 8px">
+      <div style="font-weight:900;font-size:17px;color:${r.wodType==='AMRAP'?'var(--accent)':r.wodType==='EMOM'?'var(--green)':'var(--blue)'}">${r.wodType==='AMRAP'?`${r.sets}세트 + ${r.reps}회`:r.wodType==='EMOM'?`${r.sets||0}라운드 완료`:fmtTime(r.time)}</div>
+      ${getMembers(r).length>1?`<div style="color:var(--muted);font-size:9px;margin-top:1px">팀원: ${getMembers(r).join(', ')}</div>`:''}
+    </div>`;
+    const delBtn=mkBtn('','margin-top:6px;width:100%;background:none;border:1px solid var(--red);color:var(--red);border-radius:8px;padding:5px;font-size:11px',ic.trash+' 이 기록 삭제',()=>{
+      S.records=S.records.filter(x=>x.id!==r.id);
+      fbDeleteRecord(r.id);
+      save();
+      showToast('기록 삭제됨');
+      render();
+    });
+    c.appendChild(delBtn);
+    wrap.appendChild(c);
+  });
+  return wrap;
+}
+
+// ═══════════════════════════════════════════
+// GROWTH
+// ═══════════════════════════════════════════
+function buildGrowth(){
+  const wrap=mkDiv('','');
+  const isInd=S.user?.mode==='individual';
+  const my=S.records.filter(r=>isInd?(r.name===S.user?.name&&r.class===S.user?.class):(r.team===S.user?.team&&r.class===S.user?.class)).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  wrap.innerHTML=`<div class="tf" style="font-size:21px;margin-bottom:2px">📈 성장 그래프</div>
+    <div style="color:var(--muted);font-size:10px;margin-bottom:12px">${isInd?S.user?.name:S.user?.team}의 WOD별 기록</div>`;
+  if(my.length===0){wrap.innerHTML+='<div style="text-align:center;color:var(--muted);padding:32px"><div style="font-size:40px">📈</div><div style="margin-top:7px">기록이 쌓이면 표시됩니다!</div></div>';return wrap;}
+
+  // WOD별 그룹핑
+  const wodGroups={};
+  my.forEach(r=>{
+    const key=r.wodTitle||'기타';
+    if(!wodGroups[key])wodGroups[key]=[];
+    wodGroups[key].push(r);
+  });
+
+  Object.entries(wodGroups).forEach(([wodTitle,recs])=>{
+    const wodType=recs[0].wodType;
+    const c=mkDiv('card','margin-bottom:12px;border:1px solid #f9731620');
+
+    if(wodType==='AMRAP'){
+      const maxS=Math.max(...recs.map(r=>r.sets));
+      c.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:2px">${wodTitle}</div>
+        <div style="display:flex;gap:4px;margin-bottom:8px"><span class="badge bo">AMRAP</span></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">세트 수 변화</div>
+        <div style="display:flex;gap:4px;align-items:flex-end;height:68px">
+          ${recs.slice(-10).map(r=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
+            <div style="font-size:8px;color:var(--accent);font-weight:700">${r.sets}</div>
+            <div style="width:100%;border-radius:3px 3px 0 0;background:linear-gradient(var(--accent),#ea580c);height:${maxS>0?(r.sets/maxS)*55:3}px;min-height:3px"></div>
+            <div style="font-size:7px;color:var(--muted)">${fmtDate(r.date)}</div>
+          </div>`).join('')}
+        </div>
+        <div style="margin-top:8px;display:flex;gap:6px">
+          <div style="flex:1;background:var(--card2);border-radius:8px;padding:7px;text-align:center">
+            <div style="font-size:18px;font-weight:900;color:var(--accent)">${Math.max(...recs.map(r=>r.sets))}</div>
+            <div style="font-size:9px;color:var(--muted)">최고 세트</div>
+          </div>
+          <div style="flex:1;background:var(--card2);border-radius:8px;padding:7px;text-align:center">
+            <div style="font-size:18px;font-weight:900;color:var(--green)">${recs.length}</div>
+            <div style="font-size:9px;color:var(--muted)">총 횟수</div>
+          </div>
+        </div>`;
+    } else if(wodType==='EMOM'){
+      const maxR=Math.max(...recs.map(r=>r.sets||0));
+      c.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:2px">${wodTitle}</div>
+        <div style="display:flex;gap:4px;margin-bottom:8px"><span class="badge bg">EMOM</span></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">완료 라운드 변화</div>
+        <div style="display:flex;gap:4px;align-items:flex-end;height:68px">
+          ${recs.slice(-10).map(r=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
+            <div style="font-size:8px;color:var(--green);font-weight:700">${r.sets||0}R</div>
+            <div style="width:100%;border-radius:3px 3px 0 0;background:linear-gradient(var(--green),#16a34a);height:${maxR>0?((r.sets||0)/maxR)*55:3}px;min-height:3px"></div>
+            <div style="font-size:7px;color:var(--muted)">${fmtDate(r.date)}</div>
+          </div>`).join('')}
+        </div>
+        <div style="margin-top:8px;display:flex;gap:6px">
+          <div style="flex:1;background:var(--card2);border-radius:8px;padding:7px;text-align:center">
+            <div style="font-size:18px;font-weight:900;color:var(--green)">${maxR}R</div>
+            <div style="font-size:9px;color:var(--muted)">최고 라운드</div>
+          </div>
+          <div style="flex:1;background:var(--card2);border-radius:8px;padding:7px;text-align:center">
+            <div style="font-size:18px;font-weight:900;color:var(--green)">${recs.length}</div>
+            <div style="font-size:9px;color:var(--muted)">총 횟수</div>
+          </div>
+        </div>`;
+    } else {
+      const maxT=Math.max(...recs.map(r=>r.time));
+      const minT=Math.min(...recs.map(r=>r.time));
+      c.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:2px">${wodTitle}</div>
+        <div style="display:flex;gap:4px;margin-bottom:8px"><span class="badge bb">${wodType}</span></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">완료 시간 변화 (낮을수록 빠름)</div>
+        <div style="display:flex;gap:4px;align-items:flex-end;height:68px">
+          ${recs.slice(-10).map(r=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
+            <div style="font-size:7px;color:var(--blue);font-weight:700">${fmtTime(r.time)}</div>
+            <div style="width:100%;border-radius:3px 3px 0 0;background:linear-gradient(var(--blue),#2563eb);height:${maxT>0?(r.time/maxT)*55:3}px;min-height:3px"></div>
+            <div style="font-size:7px;color:var(--muted)">${fmtDate(r.date)}</div>
+          </div>`).join('')}
+        </div>
+        <div style="margin-top:8px;display:flex;gap:6px">
+          <div style="flex:1;background:var(--card2);border-radius:8px;padding:7px;text-align:center">
+            <div style="font-size:15px;font-weight:900;color:var(--blue)">${fmtTime(minT)}</div>
+            <div style="font-size:9px;color:var(--muted)">최고 기록</div>
+          </div>
+          <div style="flex:1;background:var(--card2);border-radius:8px;padding:7px;text-align:center">
+            <div style="font-size:18px;font-weight:900;color:var(--green)">${recs.length}</div>
+            <div style="font-size:9px;color:var(--muted)">총 횟수</div>
+          </div>
+        </div>`;
+    }
+    wrap.appendChild(c);
+  });
+
+  // 전체 요약
+  wrap.appendChild(mkDiv('card','',`<div style="font-weight:700;font-size:12px;margin-bottom:6px">📊 전체 요약</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <div style="background:var(--card2);border-radius:8px;padding:8px;text-align:center"><div style="font-size:20px;font-weight:900;color:var(--accent)">${my.length}</div><div style="color:var(--muted);font-size:10px">총 운동 횟수</div></div>
+      <div style="background:var(--card2);border-radius:8px;padding:8px;text-align:center"><div style="font-size:20px;font-weight:900;color:var(--green)">${Object.keys(wodGroups).length}</div><div style="color:var(--muted);font-size:10px">참여 WOD 수</div></div>
+    </div>`));
+  return wrap;
+}
+
+// ═══════════════════════════════════════════
+// ADMIN
+// ═══════════════════════════════════════════
+function buildAdmin(){
+  // 편집 중이 아닐 때만 기본 WOD로 초기화 (편집 중엔 절대 덮어쓰지 않음)
+  if(!S.adminWodEditId && !S.adminWod) S.adminWod={...getWodForTeacher(S.user?.teacherId)};
+  if(S.adminWodEditId && !S.adminWod) {
+    // 혹시 adminWod가 날아간 경우 — 목록에서 복구
+    const tid=S.user?.teacherId;
+    const found=getWodList(tid).find(w=>w.id===S.adminWodEditId);
+    S.adminWod=found?{...found}:{...DEFAULT_WOD};
+  }
+  const wrap=mkDiv('','min-height:100vh;background:var(--bg);display:flex;flex-direction:column');
+
+  const hdr=mkDiv('','background:var(--card);border-bottom:1px solid #f9731640;padding:11px 14px;display:flex;align-items:center;gap:8px');
+  hdr.innerHTML=`<div style="display:flex;align-items:center;gap:8px;width:100%">
+    <button style="background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px;flex-shrink:0;display:flex;align-items:center;cursor:pointer" onclick="setState({screen:'schoolSelect',lAdminMode:false,adminWod:null,user:null})">${ic.back}</button>
+    <div style="flex:1"><div class="tf" style="font-size:16px;color:var(--accent)">관리자 모드</div><div style="font-size:10px;color:var(--muted)">${S.user?.name} · ${getCurrentSchool()?.name||'월촌중학교'}</div></div>
+    <span class="badge bo">TEACHER</span>
+  </div>`;
+  wrap.appendChild(hdr);
+
+  const tabRow=mkDiv('','display:flex;background:var(--card);border-bottom:1px solid var(--border);overflow-x:auto');
+  [['wod','WOD 설정'],['classes','담당 반'],['records','기록 관리']].forEach(([v,l])=>{
+    tabRow.appendChild(mkBtn('',`padding:9px 13px;background:none;border:none;font-family:'Noto Sans KR';white-space:nowrap;font-size:12px;color:${S.adminTab===v?'var(--accent)':'var(--muted)'};font-weight:${S.adminTab===v?700:400};border-bottom:${S.adminTab===v?'2px solid var(--accent)':'2px solid transparent'}`,l,()=>setState({adminTab:v})));
+  });
+  wrap.appendChild(tabRow);
+
+  const sc=mkDiv('','padding:13px;padding-bottom:40px;overflow-y:auto;flex:1');
+  if(S.adminTab==='wod')sc.appendChild(buildAdminWod());
+  else if(S.adminTab==='classes')sc.appendChild(buildAdminClasses());
+  else if(S.adminTab==='records')sc.appendChild(buildAdminRecords());
+
+  // 로그아웃
+  const logoutBtn=mkBtn('btn-d','margin:16px 13px 30px','🚪 교사 로그아웃',()=>setState({screen:'schoolSelect',user:null,lAdminMode:false,lAdminId:'',lAdminPw:'',adminWod:null,adminClassList:null}));
+  sc.appendChild(logoutBtn);
+  sc.appendChild(mkDiv('','text-align:center;color:var(--border);font-size:9px;margin-top:8px;line-height:1.5','데이터는 Firebase에 실시간 저장됩니다.<br>여러 기기에서 동시에 사용 가능합니다.'));
+  wrap.appendChild(sc);
+  return wrap;
+}
+
+// ── 관리자: WOD 설정 ──
+function buildAdminWod(){
+  const wrap=mkDiv('','display:flex;flex-direction:column;gap:10px');
+  const tid=S.user?.teacherId;
+  const wodList=getWodList(tid);
+  const activeIds=getActiveWodIds(tid);
+
+  // WOD 목록 관리
+  const listCard=mkDiv('card','border:1px solid #f9731630');
+  listCard.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <div style="font-weight:700;font-size:13px">📋 WOD 목록 (${wodList.length}개)</div>
+  </div>`;
+
+  if(wodList.length===0){
+    listCard.innerHTML+=`<div style="text-align:center;color:var(--muted);font-size:12px;padding:14px 0">등록된 WOD가 없습니다.<br>아래에서 새 WOD를 만들어보세요!</div>`;
+  } else {
+    wodList.forEach((w,i)=>{
+      const isActive=activeIds.includes(w.id);
+      const tl=w.timeLimit||(w.timeLimitMin||10)*60+(w.timeLimitSec||0);
+      const row=mkDiv('','background:var(--card2);border-radius:10px;padding:10px;margin-bottom:6px;border:1px solid '+(isActive?'var(--green)':'var(--border)'));
+      row.innerHTML=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+        <div style="flex:1;font-weight:700;font-size:12px">${w.title}</div>
+        <span class="badge bo">${w.type}</span>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:7px">${w.type==='AMRAP'?fmtTime(tl)+' AMRAP':w.type==='EMOM'?(w.emomRounds||w.exercises.length)+'분 EMOM':w.targetSets+'세트 For Time'} · ${w.teamMode==='individual'?'개인전':'팀전'}</div>`;
+
+      const btnRow=mkDiv('','display:flex;gap:5px;flex-wrap:wrap');
+      // 공개/비공개 토글
+      const toggleBtn=mkBtn(isActive?'btn-g':'btn-s',`flex:1;font-size:11px;padding:7px`,isActive?'✅ 공개중':'비공개',()=>{
+        let ids=[...getActiveWodIds(tid)];
+        if(isActive) ids=ids.filter(id=>id!==w.id);
+        else ids=[...ids,w.id];
+        setActiveWodIds(tid,ids);
+        fbSaveActiveWodIds(tid,ids);
+        showToast(isActive?'비공개로 변경됨':'공개로 변경됨');
+        render();
+      });
+      btnRow.appendChild(toggleBtn);
+      // 시뮬레이션 버튼
+      btnRow.appendChild(mkBtn('btn-b',`flex:1;font-size:11px;padding:7px`,'▶ 시뮬레이션',()=>{
+        _simWodCache=w;
+        setState({adminWodSimId:w.id,screen:'wodSim',simData:null,simSlide:0,simPlaying:false,simFromStudent:false});
+      }));
+      const btnRow2=mkDiv('','display:flex;gap:5px;margin-top:5px');
+      // 편집 버튼
+      btnRow2.appendChild(mkBtn('btn-s',`flex:1;font-size:11px;padding:7px`,'✏️ 편집',()=>{
+        setState({
+          adminWod:{...w,exercises:[...(w.exercises||[])],exerciseDescs:[...(w.exerciseDescs||[])]},
+          adminWodEditId:w.id
+        });
+      }));
+      // 삭제 버튼
+      btnRow2.appendChild(mkBtn('btn-d',`width:38px;font-size:11px;padding:7px;border-radius:10px`,ic.trash,()=>{
+        const newList=wodList.filter(x=>x.id!==w.id);
+        const newIds=activeIds.filter(id=>id!==w.id);
+        setWodList(tid,newList);
+        setActiveWodIds(tid,newIds);
+        fbSaveWodList(tid,newList);
+        fbSaveActiveWodIds(tid,newIds);
+        showToast('WOD 삭제됨');
+        render();
+      }));
+      row.appendChild(btnRow);
+      row.appendChild(btnRow2);
+      listCard.appendChild(row);
+    });
+  }
+
+  // 새 WOD 만들기 버튼
+  listCard.appendChild(mkBtn('btn-p','margin-top:6px','+ 새 WOD 만들기',()=>{
+    setState({adminWod:{...DEFAULT_WOD,id:'',title:'새 WOD'},adminWodEditId:'new'});
+  }));
+  wrap.appendChild(listCard);
+
+  // WOD 편집 폼 (편집 중일 때만 표시)
+  if(S.adminWodEditId){
+    wrap.appendChild(buildAdminWodForm());
+  }
+
+  return wrap;
+}
+
+// ── 관리자: WOD 편집 폼 ──
+function buildAdminWodForm(){
+  const wrap=mkDiv('','display:flex;flex-direction:column;gap:10px');
+  const aw=S.adminWod||{...DEFAULT_WOD};
+  const tid=S.user?.teacherId;
+  const curMin=aw.timeLimitMin!==undefined?aw.timeLimitMin:Math.floor((aw.timeLimit||600)/60);
+  const curSec=aw.timeLimitSec!==undefined?aw.timeLimitSec:(aw.timeLimit||600)%60;
+
+  // 제목
+  const c1=mkDiv('card','');
+  c1.innerHTML='<div style="font-weight:700;font-size:13px;margin-bottom:7px">WOD 제목</div>';
+  c1.appendChild(mkInp('inp',{type:'text',value:aw.title||''},v=>{S.adminWod.title=v;}));
+  wrap.appendChild(c1);
+
+  // 운동 모드 (개인전/팀전)
+  const c2=mkDiv('card','border:1px solid #f9731630');
+  c2.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:9px">운동 모드</div>
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button class="chip ${(aw.teamMode||'team')==='individual'?'on':''}" style="flex:1;font-size:12px" onclick="S.adminWod.teamMode='individual';render()">🏃 개인전</button>
+      <button class="chip ${(aw.teamMode||'team')==='team'?'on':''}" style="flex:1;font-size:12px" onclick="S.adminWod.teamMode='team';if(!S.adminWod.teamCount)S.adminWod.teamCount=8;render()">👥 팀전</button>
+    </div>`;
+  if((aw.teamMode||'team')==='team'){
+    c2.innerHTML+=`<div style="color:var(--muted);font-size:10px;margin-bottom:6px">팀 수</div>`;
+    const tg=mkDiv('','display:grid;grid-template-columns:repeat(5,1fr);gap:3px');
+    [6,7,8,9,10,11,12,13,14,15,16].forEach(n=>{
+      tg.appendChild(mkBtn(`chip ${(aw.teamCount||8)===n?'on':''}`,`padding:6px 1px;font-size:11px;font-weight:700`,''+n,()=>{S.adminWod.teamCount=n;render();}));
+    });
+    c2.appendChild(tg);
+  }
+  wrap.appendChild(c2);
+
+  // 운동 방식 (AMRAP/ForTime/EMOM)
+  const c3=mkDiv('card','');
+  c3.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:9px">운동 방식</div>
+    <div style="display:flex;gap:6px;margin-bottom:8px">
+      <button class="chip ${aw.type==='AMRAP'?'on':''}" style="flex:1" onclick="S.adminWod.type='AMRAP';render()">AMRAP</button>
+      <button class="chip ${aw.type==='ForTime'?'on':''}" style="flex:1" onclick="S.adminWod.type='ForTime';render()">For Time</button>
+      <button class="chip ${aw.type==='EMOM'?'on':''}" style="flex:1" onclick="S.adminWod.type='EMOM';render()">EMOM</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);line-height:1.6;background:var(--card2);border-radius:9px;padding:8px 10px">
+      ${aw.type==='AMRAP'?'⏱ 제한 시간 안에 운동을 최대한 많이 반복. 세트 수로 기록합니다.':aw.type==='EMOM'?'🕐 Every Minute On the Minute — 매 분 시작할 때마다 새로운 운동을 합니다. 남은 시간은 휴식!':'🎯 목표 세트를 최대한 빠르게 완료. 걸린 시간으로 기록합니다.'}
+    </div>`;
+  wrap.appendChild(c3);
+
+  if(aw.type==='AMRAP'){
+    // AMRAP 시간 (분/초 입력)
+    const c4=mkDiv('card','');
+    c4.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:9px">제한 시간</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <input class="inp" type="number" min="0" max="99" value="${curMin}" style="text-align:center;font-size:24px;font-weight:900"
+          oninput="S.adminWod.timeLimitMin=Math.max(0,+this.value);S.adminWod.timeLimit=S.adminWod.timeLimitMin*60+(S.adminWod.timeLimitSec||0);render()"/>
+        <span style="font-size:18px;font-weight:700">:</span>
+        <input class="inp" type="number" min="0" max="59" value="${curSec}" style="text-align:center;font-size:24px;font-weight:900"
+          oninput="S.adminWod.timeLimitSec=Math.min(59,Math.max(0,+this.value));S.adminWod.timeLimit=(S.adminWod.timeLimitMin||0)*60+S.adminWod.timeLimitSec;render()"/>
+      </div>
+      <div style="display:flex;gap:8px"><div style="flex:1;text-align:center;color:var(--muted);font-size:10px">분</div><div style="width:20px"></div><div style="flex:1;text-align:center;color:var(--muted);font-size:10px">초</div></div>
+      <div style="margin-top:6px;text-align:center;color:var(--accent);font-size:13px;font-weight:700">= ${fmtTime((aw.timeLimitMin||0)*60+(aw.timeLimitSec||0))} AMRAP</div>`;
+    wrap.appendChild(c4);
+  } else if(aw.type==='EMOM'){
+    const c4=mkDiv('card','');
+    c4.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:7px">총 라운드 수 (분)</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:9px">운동 목록이 ${aw.exercises?.length||0}개면 자동으로 ${aw.exercises?.length||0}분 EMOM이 됩니다. 더 길게 하려면 늘려주세요.</div>`;
+    const ri=mkInp('inp',{type:'number',value:aw.emomRounds||aw.exercises?.length||3},v=>{S.adminWod.emomRounds=Math.max(1,+v);});
+    ri.style.cssText='font-size:28px;font-weight:900;text-align:center';
+    c4.appendChild(ri);
+    c4.innerHTML+=`<div style="margin-top:8px;text-align:center;color:var(--accent);font-size:13px;font-weight:700">= ${aw.emomRounds||aw.exercises?.length||3}분 EMOM</div>`;
+    wrap.appendChild(c4);
+  } else {
+    const c4=mkDiv('card','');
+    c4.innerHTML='<div style="font-weight:700;font-size:13px;margin-bottom:7px">목표 세트 수</div>';
+    const si=mkInp('inp',{type:'number',value:aw.targetSets||3},v=>{S.adminWod.targetSets=Math.max(1,+v);});
+    wrap.appendChild(c4);
+    c4.appendChild(si);
+  }
+
+  // 운동 목록
+  const c5=mkDiv('card','');
+  c5.innerHTML='<div style="font-weight:700;font-size:13px;margin-bottom:9px">운동 목록</div>';
+  (aw.exercises||[]).forEach((ex,i)=>{
+    const row=mkDiv('','margin-bottom:10px;background:var(--card2);border-radius:10px;padding:8px');
+    row.innerHTML=`<div style="display:flex;gap:4px;align-items:center;margin-bottom:5px">
+      <span style="color:var(--accent);font-weight:700;min-width:18px;font-size:11px">${i+1}.</span>`;
+    const nameWrap=mkDiv('','display:flex;gap:4px;flex:1;align-items:center');
+    const ei=mkInp('inp',{type:'text',value:ex,placeholder:'운동 이름'},v=>{S.adminWod.exercises[i]=v;});
+    ei.style.flex='1';
+    nameWrap.appendChild(ei);
+    nameWrap.appendChild(mkBtn('','background:none;border:none;color:var(--red);padding:4px',ic.trash,()=>{
+      S.adminWod.exercises.splice(i,1);
+      if(!S.adminWod.exerciseDescs) S.adminWod.exerciseDescs=[];
+      S.adminWod.exerciseDescs.splice(i,1);
+      render();
+    }));
+    row.appendChild(nameWrap);
+    row.innerHTML+='</div>';
+    // 운동 설명 입력
+    const descLabel=mkDiv('','font-size:10px;color:var(--muted);margin-bottom:3px','💡 운동 설명 (시뮬레이션에 표시됨)');
+    const di=document.createElement('textarea');
+    di.className='inp';
+    di.placeholder='예) 엎드려서 팔굽혀펴기 자세 → 팔을 구부렸다 펴기 → 10회 반복';
+    di.value=(aw.exerciseDescs||[])[i]||'';
+    di.style.cssText='width:100%;height:60px;resize:none;font-size:11px;line-height:1.5';
+    di.oninput=function(){
+      if(!S.adminWod.exerciseDescs) S.adminWod.exerciseDescs=[];
+      S.adminWod.exerciseDescs[i]=this.value;
+    };
+    row.appendChild(descLabel);
+    row.appendChild(di);
+    c5.appendChild(row);
+  });
+  const addRow=mkDiv('','display:flex;gap:4px;margin-top:4px');
+  const newExInp=mkInp('inp',{type:'text',placeholder:'운동 추가',value:S.adminNewEx||''},v=>{S.adminNewEx=v;});
+  newExInp.addEventListener('keydown',e=>{if(e.key==='Enter'&&S.adminNewEx?.trim()){S.adminWod.exercises=[...(S.adminWod.exercises||[]),S.adminNewEx.trim()];S.adminNewEx='';render();}});
+  addRow.appendChild(newExInp);
+  addRow.appendChild(mkBtn('btn-g','width:42px;border-radius:10px',ic.plus,()=>{if(S.adminNewEx?.trim()){S.adminWod.exercises=[...(S.adminWod.exercises||[]),S.adminNewEx.trim()];S.adminNewEx='';render();}}));
+  c5.appendChild(addRow);
+  wrap.appendChild(c5);
+
+  // 저장
+  const saveBtnRow=mkDiv('','display:flex;gap:6px');
+  saveBtnRow.appendChild(mkBtn('btn-p','flex:1','💾 WOD 저장',()=>{
+    const isNew=S.adminWodEditId==='new';
+    const saved={...S.adminWod,id:isNew?Date.now().toString():S.adminWod.id,date:new Date().toISOString().slice(0,10)};
+    saved.timeLimit=(saved.timeLimitMin||0)*60+(saved.timeLimitSec||0);
+    if(!saved.title?.trim()){showToast('WOD 제목을 입력해주세요','error');return;}
+    if(!saved.exercises?.length){showToast('운동을 최소 1개 이상 추가해주세요','error');return;}
+    const list=getWodList(tid);
+    if(isNew){
+      list.push(saved);
+    } else {
+      const idx=list.findIndex(w=>w.id===saved.id);
+      if(idx>=0) list[idx]=saved; else list.push(saved);
+    }
+    setWodList(tid,list);
+    fbSaveWodList(tid,list).then(()=>{
+      showToast('WOD 저장 완료! ✅ Firebase에 동기화됨');
+    }).catch(()=>{
+      showToast('로컬 저장됨 (Firebase 동기화 실패 - 인터넷 확인)','error');
+    });
+    S.adminWod=null;
+    S.adminWodEditId=null;
+    render(); // ← 저장 후 즉시 목록 갱신
+  }));
+  saveBtnRow.appendChild(mkBtn('btn-s','flex:0.4;font-size:12px','취소',()=>{
+    S.adminWod=null;
+    S.adminWodEditId=null;
+    render();
+  }));
+  wrap.appendChild(saveBtnRow);
+  return wrap;
+}
+
+// ── 관리자: 담당 반 설정 ──
+function buildAdminClasses(){
+  const tid=S.user?.teacherId;
+  if(!S.adminClassList)S.adminClassList=[...getTeacherClasses(tid)||[]];
+  const wrap=mkDiv('','display:flex;flex-direction:column;gap:10px');
+
+  const info=mkDiv('card','');
+  info.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:7px">내 담당 반 설정</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:11px">선택한 반만 학생 로그인 화면에 표시됩니다. 선택하지 않으면 전체 반이 표시됩니다.</div>`;
+
+  // 학년 탭
+  const gradeTabRow=mkDiv('','display:flex;gap:6px;margin-bottom:9px');
+  ['2학년','3학년'].forEach((g,gi)=>{
+    const grade=gi===0?'2':'3';
+    const isOn=(S.adminClassGrade||'2')===grade;
+    gradeTabRow.appendChild(mkBtn(`chip ${isOn?'on':''}`,`flex:1;font-size:12px;padding:8px`,g,()=>{S.adminClassGrade=grade;render();}));
+  });
+  info.appendChild(gradeTabRow);
+
+  const showClasses=(S.adminClassGrade||'2')==='2'?CLASSES_2:CLASSES_3;
+  const grid=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:11px');
+  showClasses.forEach(c=>{
+    const on=(S.adminClassList||[]).includes(c);
+    grid.appendChild(mkBtn(`chip ${on?'on':''}`,`font-size:11px;padding:8px 3px`,c,()=>{
+      if(!S.adminClassList)S.adminClassList=[];
+      if(S.adminClassList.includes(c))S.adminClassList=S.adminClassList.filter(x=>x!==c);
+      else S.adminClassList=[...S.adminClassList,c];
+      render();
+    }));
+  });
+  info.appendChild(grid);
+
+  // 전체 선택 / 해제
+  const row=mkDiv('','display:flex;gap:6px;margin-bottom:11px');
+  row.appendChild(mkBtn('btn-s','flex:1;font-size:12px;padding:9px','이 학년 전체 선택',()=>{
+    const grade=S.adminClassGrade||'2';
+    const gradeList=grade==='2'?CLASSES_2:CLASSES_3;
+    const current=S.adminClassList||[];
+    S.adminClassList=[...new Set([...current,...gradeList])];
+    render();
+  }));
+  row.appendChild(mkBtn('btn-s','flex:1;font-size:12px;padding:9px','이 학년 전체 해제',()=>{
+    const grade=S.adminClassGrade||'2';
+    S.adminClassList=(S.adminClassList||[]).filter(c=>!c.startsWith(grade+'-'));
+    render();
+  }));
+  info.appendChild(row);
+
+  info.appendChild(mkBtn('btn-p','','💾 담당 반 저장',()=>{
+    setTeacherClasses(tid,S.adminClassList||[]);
+    fbSaveClasses(tid,S.adminClassList||[]); // Firebase 동기화
+    showToast('담당 반이 저장되었습니다! ✅');
+    render();
+  }));
+  wrap.appendChild(info);
+
+  const sel=S.adminClassList&&S.adminClassList.length>0?S.adminClassList:ALL_CLASSES;
+  wrap.appendChild(mkDiv('card','',`<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px">현재 학생에게 표시되는 반 (${sel.length}개)</div><div style="font-size:12px">${sel.join(', ')}</div>`));
+  return wrap;
+}
+
+// ── 관리자: 기록 관리 ──
+function buildAdminRecords(){
+  const wrap=mkDiv('','display:flex;flex-direction:column;gap:9px');
+
+  // 필터
+  const fc=mkDiv('card','');
+  fc.innerHTML='<div style="font-weight:700;font-size:13px;margin-bottom:8px">🔍 필터</div>';
+  fc.innerHTML+=`<div style="color:var(--muted);font-size:10px;margin-bottom:4px">반</div>`;
+  const cg=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:7px');
+  [['all','전체'],...ALL_CLASSES.map(c=>[c,c])].forEach(([v,l])=>{
+    cg.appendChild(mkBtn(`chip ${S.adminFilterCls===v?'on':''}`,`font-size:9px;padding:5px 1px`,l,()=>setState({adminFilterCls:v})));
+  });
+  fc.appendChild(cg);
+  const mr=mkDiv('','display:flex;gap:4px;margin-bottom:7px');
+  [['all','전체'],['individual','개인전'],['team','팀전']].forEach(([v,l])=>{
+    mr.appendChild(mkBtn(`chip ${S.adminFilterMode===v?'on':''}`,`flex:1;font-size:11px`,l,()=>setState({adminFilterMode:v})));
+  });
+  fc.appendChild(mr);
+  wrap.appendChild(fc);
+
+  // 초기화
+  const cc=mkDiv('card','');
+  cc.innerHTML='<div style="font-weight:700;font-size:12px;margin-bottom:8px">기록 초기화</div>';
+  const targ=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:8px');
+  [['all','전체'],...ALL_CLASSES.map(c=>[c,c])].forEach(([v,l])=>{
+    targ.appendChild(mkBtn(`chip ${S.adminClearTarget===v?'on':''}`,`font-size:9px;padding:4px 1px`,l,()=>setState({adminClearTarget:v,adminConfirm:false})));
+  });
+  cc.appendChild(targ);
+  if(!S.adminConfirm){
+    cc.appendChild(mkBtn('btn-d','',S.adminClearTarget==='all'?'전체 초기화':`${S.adminClearTarget} 초기화`,()=>setState({adminConfirm:true})));
+  } else {
+    const cf=mkDiv('','');
+    cf.innerHTML='<div style="color:var(--red);font-weight:700;text-align:center;margin-bottom:6px;font-size:11px">정말 삭제하시겠습니까?</div>';
+    const btnRow=mkDiv('','display:flex;gap:4px');
+    btnRow.appendChild(mkBtn('btn-d','flex:1','삭제',async ()=>{
+      const tid=S.user?.teacherId;
+      const toDelete = S.adminClearTarget==='all'
+        ? S.records.filter(r=>r.teacherId===tid)
+        : S.records.filter(r=>r.teacherId===tid&&r.class===S.adminClearTarget);
+      toDelete.forEach(r=>fbDeleteRecord(r.id));
+      if(S.adminClearTarget==='all') S.records=S.records.filter(r=>r.teacherId!==tid);
+      else S.records=S.records.filter(r=>!(r.teacherId===tid&&r.class===S.adminClearTarget));
+      save();
+      showToast('초기화됨');setState({adminConfirm:false});
+    }));
+    btnRow.appendChild(mkBtn('btn-s','flex:1','취소',()=>setState({adminConfirm:false})));
+    cf.appendChild(btnRow);cc.appendChild(cf);
+  }
+  wrap.appendChild(cc);
+
+  // 기록 목록
+  let filtered=S.records.filter(r=>r.teacherId===S.user?.teacherId);
+  if(S.adminFilterCls!=='all')filtered=filtered.filter(r=>r.class===S.adminFilterCls);
+  if(S.adminFilterMode!=='all')filtered=filtered.filter(r=>r.mode===S.adminFilterMode||(S.adminFilterMode==='individual'&&!r.mode));
+
+  // 순위순 정렬 (AMRAP: 세트 높은순, ForTime: 시간 짧은순)
+  const amraps=filtered.filter(r=>r.wodType==='AMRAP');
+  const emoms=filtered.filter(r=>r.wodType==='EMOM');
+  const fts=filtered.filter(r=>r.wodType==='ForTime');
+  amraps.sort((a,b)=>b.sets-a.sets||b.reps-a.reps||new Date(a.date)-new Date(b.date));
+  emoms.sort((a,b)=>(b.sets||0)-(a.sets||0)||new Date(a.date)-new Date(b.date));
+  fts.sort((a,b)=>a.time-b.time||new Date(a.date)-new Date(b.date));
+  const sorted=[...amraps,...emoms,...fts];
+
+  const medals=['🥇','🥈','🥉'];
+  const lc=mkDiv('card','');
+  lc.innerHTML=`<div style="font-weight:700;font-size:12px;margin-bottom:8px">기록 목록 (${sorted.length}건) · 순위순</div>`;
+  if(sorted.length===0){lc.innerHTML+='<div style="text-align:center;color:var(--muted);padding:16px;font-size:12px">기록이 없습니다</div>';}
+  sorted.slice(0,50).forEach((r,idx)=>{
+    const hasAbn=r.checkLogs&&r.checkLogs.some(l=>l.abnormal);
+    const expanded=S.adminExpandRecord===r.id;
+    const rank=idx+1;
+    const rankLabel=rank<=3?medals[rank-1]:rank+'위';
+    const rc=mkDiv('','background:var(--card2);border-radius:8px;padding:8px;margin-bottom:6px;border:1px solid '+(hasAbn?'var(--red)':rank<=3?'var(--gold)':'var(--border)'));
+    rc.innerHTML=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+      <div style="font-size:${rank<=3?16:12}px;min-width:28px;text-align:center">${rankLabel}</div>
+      <div style="flex:1">
+        <div style="font-size:12px;font-weight:700">${r.class} · ${r.mode==='team'?r.team:r.name||getMembers(r)[0]||''}</div>
+        <div style="font-size:10px;color:var(--muted)">${getMembers(r).join(', ')||''} · ${r.wodTitle||''}</div>
+      </div>
+      <div style="font-size:14px;font-weight:900;color:${r.wodType==='AMRAP'?'var(--accent)':r.wodType==='EMOM'?'var(--green)':'var(--blue)'}">${r.wodType==='AMRAP'?`${r.sets||0}S+${r.reps||0}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time)}</div>
+      ${hasAbn?'<span style="color:var(--red);font-size:11px">⚠️</span>':''}
+    </div>
+    <div style="font-size:9px;color:var(--muted)">${fmtFull(r.date)}</div>`;
+    const detBtn=mkBtn('','background:none;border:none;color:var(--muted);font-size:9px;margin-top:2px',expanded?'▲ 접기':'▼ 상세',()=>setState({adminExpandRecord:expanded?null:r.id}));
+    rc.appendChild(detBtn);
+    if(expanded){
+      if(r.checkLogs&&r.checkLogs.length>0){rc.innerHTML+=`<div style="margin-top:4px;background:var(--bg);border-radius:6px;padding:5px 7px;font-size:9px"><div style="font-weight:700;margin-bottom:2px">세트 로그</div>${r.checkLogs.map(l=>`<div style="color:${l.abnormal?'var(--red)':'var(--muted)'}">Set ${l.set} · ${fmtTime(l.elapsed)}${l.abnormal?' ⚠️':''}</div>`).join('')}</div>`;}
+      if(r.forTimeSetLogs&&r.forTimeSetLogs.length>0){rc.innerHTML+=`<div style="margin-top:4px;background:var(--bg);border-radius:6px;padding:5px 7px;font-size:9px"><div style="font-weight:700;margin-bottom:2px">세트 로그</div>${r.forTimeSetLogs.map(l=>`<div style="color:var(--muted)">Set ${l.set} · ${fmtTime(l.elapsed)}</div>`).join('')}</div>`;}
+      rc.appendChild(mkBtn('btn-d','font-size:10px;padding:6px;margin-top:6px','기록 삭제',()=>{
+        fbDeleteRecord(r.id);
+        S.records=S.records.filter(x=>x.id!==r.id);
+        save(); // localStorage에도 반영
+        showToast('삭제됨');
+        setState({adminExpandRecord:null});
+      }));
+    }
+    lc.appendChild(rc);
+  });
+  wrap.appendChild(lc);
+  return wrap;
+}
+
+// ═══════════════════════════════════════════
+// START
+// ═══════════════════════════════════════════
+// 1. 일단 로컬 데이터로 먼저 화면 그리기
+render();
+
+// 2. Firebase 로드 완료 후 자동으로 화면 갱신됨 (fbLoadAll 내부에서 _render 호출)
+</script>
+</body>
+</html>
