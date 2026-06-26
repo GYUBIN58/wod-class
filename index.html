@@ -1301,11 +1301,8 @@ function completeAmrapSet(){
 function buildEmom(){
   const wod=getActiveWod();
   const exercises=wod.exercises||[];
-  const totalRounds=wod.emomRounds||exercises.length;
-  const curExIdx=S.eExIdx%exercises.length;
-  const nextExIdx=(S.eExIdx+1)%exercises.length;
-  const curEx=exercises[curExIdx]||'';
-  const nextEx=exercises[nextExIdx]||'';
+  const totalRounds=wod.emomRounds||3;
+
   const wrap=mkDiv('','min-height:100vh;display:flex;flex-direction:column;padding:13px;background:var(--bg)');
 
   if(S.eDone){
