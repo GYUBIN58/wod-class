@@ -2705,7 +2705,17 @@ function buildAdminWodForm(){
       if(idx>=0) list[idx]=saved; else list.push(saved);
     }
     setWodList(tid,list);
+    // 공개 목록도 Firebase에 동기화
+    const currentActiveIds=getActiveWodIds(tid);
+    // 새 WOD면 자동으로 공개 목록에 추가
+    let newActiveIds=currentActiveIds;
+    if(isNew && !currentActiveIds.includes(saved.id)){
+      newActiveIds=[...currentActiveIds, saved.id];
+      setActiveWodIds(tid, newActiveIds);
+    }
     fbSaveWodList(tid,list).then(()=>{
+      return fbSaveActiveWodIds(tid, newActiveIds);
+    }).then(()=>{
       showToast('WOD 저장 완료! ✅ Firebase에 동기화됨');
     }).catch(()=>{
       showToast('로컬 저장됨 (Firebase 동기화 실패 - 인터넷 확인)','error');
