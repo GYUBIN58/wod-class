@@ -1149,14 +1149,14 @@ function startWorkTimer(){
     workInt=setInterval(()=>{
       if(S.eTimeLeft<=1){
         if(S.eRestPhase){
-          // 휴식 끝 → 운동 시작
+          // 휴식 끝 → 다음 라운드 운동 시작 (60초 새로 시작)
           if(S.eRound>totalRounds){
             clearInterval(workInt);
             setState({eTimeLeft:0,eRunning:false,eDone:true,eRestPhase:false});
             return;
           }
           S.eRestPhase=false;
-          S.eTimeLeft=60;
+          S.eTimeLeft=60; // 다음 라운드 운동은 60초 새로 시작
         } else {
           // 1분 다 됐는데 완료 안 누름 → 자동으로 다음 라운드
           S.eRound++;
@@ -1345,7 +1345,7 @@ function buildEmom(){
     // 휴식 중
     const restCard=mkDiv('','background:#eff6ff;border-radius:16px;padding:18px;margin-bottom:10px;border:2px solid var(--blue);text-align:center');
     restCard.innerHTML=`<div style="font-size:22px;font-weight:900;color:var(--blue);margin-bottom:6px">😮‍💨 휴식 중</div>
-      <div style="font-size:13px;color:var(--muted)">${S.eTimeLeft}초 후 ${S.eRound}라운드 시작!</div>`;
+      <div style="font-size:13px;color:var(--muted)">${S.eTimeLeft}초 후 ${S.eRound}라운드 시작! 다음 운동 준비하세요</div>`;
     wrap.appendChild(restCard);
     // 다음 라운드 운동 미리보기
     const previewCard=mkDiv('','background:var(--card);border-radius:14px;padding:14px;margin-bottom:10px');
@@ -1360,11 +1360,11 @@ function buildEmom(){
     wrap.appendChild(exCard);
 
     // 완료 버튼
-    const doneBtn=mkBtn('btn-g','width:100%;padding:18px;font-size:18px;font-weight:900;margin-bottom:8px','✅ 완료! 휴식 시작',()=>{
+    const doneBtn=mkBtn('btn-g','width:100%;padding:18px;font-size:18px;font-weight:900;margin-bottom:8px','✅ 완료! 남은 시간 휴식',()=>{
       S.eRestPhase=true;
       S.eRound++;
       if(S.eRound>totalRounds){ clearInterval(workInt); S.eDone=true; render(); return; }
-      S.eTimeLeft=60;
+      // eTimeLeft는 그대로 유지 → 남은 시간만큼만 휴식
       render();
     });
     wrap.appendChild(doneBtn);
