@@ -2603,6 +2603,9 @@ function syncAdminWodInputs(){
   const roundsInp=document.querySelector('#admin-wod-rounds');
   if(roundsInp) S.adminWod.emomRounds=Math.max(1,+roundsInp.value);
 }
+
+// ── 관리자: WOD 편집 폼 ──
+function buildAdminWodForm(){
   const wrap=mkDiv('','display:flex;flex-direction:column;gap:10px');
   const aw=S.adminWod||{...DEFAULT_WOD};
   const tid=S.user?.teacherId;
