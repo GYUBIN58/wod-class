@@ -461,7 +461,7 @@ let S = {
   fSets:0, fSetLogs:[], fCurExIdx:0, fExLog:[], fExCooldown:0,
   // ForTime (fChk 제거 - aChk1/aChk2로 통일)
   // EMOM
-  eTimeLeft:0, eRound:1, eRunning:false, eDone:false, eExIdx:0,
+  eTimeLeft:0, eRound:1, eRunning:false, eDone:false, eExIdx:0, eRestPhase:false,
   // saveRecord
   srSets:0, srReps:0, srTimeMin:0, srTimeSec:0,
   // rank
@@ -1145,23 +1145,29 @@ function startWorkTimer(){
       S.aTimeLeft--; render();
     },1000);
   } else if(wod.type==='EMOM'){
-    // EMOM: 매 분(60초)마다 다음 운동으로
-    const exercises=wod.exercises||[];
-    const totalRounds=wod.emomRounds||exercises.length;
+    const totalRounds=wod.emomRounds||wod.exercises.length;
     workInt=setInterval(()=>{
       if(S.eTimeLeft<=1){
-        // 1분 종료
-        const nextEx=S.eExIdx+1;
-        if(nextEx>=totalRounds){
-          clearInterval(workInt);
-          setState({eTimeLeft:0,eRunning:false,eDone:true});
-          return;
+        if(S.eRestPhase){
+          // 휴식 끝 → 운동 시작
+          if(S.eRound>totalRounds){
+            clearInterval(workInt);
+            setState({eTimeLeft:0,eRunning:false,eDone:true,eRestPhase:false});
+            return;
+          }
+          S.eRestPhase=false;
+          S.eTimeLeft=60;
+        } else {
+          // 1분 다 됐는데 완료 안 누름 → 자동으로 다음 라운드
+          S.eRound++;
+          if(S.eRound>totalRounds){
+            clearInterval(workInt);
+            setState({eTimeLeft:0,eRunning:false,eDone:true,eRestPhase:false});
+            return;
+          }
+          S.eTimeLeft=60;
         }
-        S.eExIdx=nextEx;
-        S.eRound=nextEx+1;
-        S.eTimeLeft=60;
-        render();
-        return;
+        render(); return;
       }
       S.eTimeLeft--; render();
     },1000);
@@ -1304,59 +1310,75 @@ function buildEmom(){
 
   if(S.eDone){
     wrap.innerHTML=`<div class="tf" style="font-size:28px;color:var(--accent);text-align:center;margin-top:45px">🎉 완료!</div>
-      <div style="font-size:18px;font-weight:700;text-align:center;margin:10px 0;color:var(--muted)">${totalRounds}분 EMOM 종료!</div>
-      <div style="text-align:center;color:var(--muted);font-size:13px;margin-bottom:24px">${exercises.length}가지 운동을 모두 완료했어요 💪</div>`;
-    wrap.appendChild(mkBtn('btn-p','','기록 저장하기 →',()=>{ clearInterval(workInt); setState({screen:'saveRecord',srSets:totalRounds,srReps:0,srTimeMin:0,srTimeSec:0,aChk1:false,aChk2:false}); }));
+      <div style="font-size:18px;font-weight:700;text-align:center;margin:10px 0;color:var(--muted)">${totalRounds}라운드 EMOM 종료!</div>
+      <div style="text-align:center;color:var(--muted);font-size:13px;margin-bottom:24px">${S.eRound-1}라운드 완료했어요 💪</div>`;
+    wrap.appendChild(mkBtn('btn-p','','기록 저장하기 →',()=>{ clearInterval(workInt); setState({screen:'saveRecord',srSets:S.eRound-1,srReps:0,srTimeMin:0,srTimeSec:0,aChk1:false,aChk2:false}); }));
     return wrap;
   }
 
   const hdr=mkDiv('','display:flex;align-items:center;margin-bottom:8px');
   hdr.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px',ic.back,()=>{ clearInterval(cdInt); clearInterval(workInt); setState({screen:'main',wPhase:'ready'}); }));
   hdr.appendChild(mkDiv('tf','flex:1;text-align:center;font-size:15px',wod.title));
-  hdr.appendChild(mkDiv('','font-size:13px;font-weight:700;color:var(--accent)',`${S.eRound}/${totalRounds}분`));
+  hdr.appendChild(mkDiv('','font-size:13px;font-weight:700;color:var(--accent)',`${S.eRound}/${totalRounds}라운드`));
   wrap.appendChild(hdr);
 
   // 원형 타이머
   const prog=S.eTimeLeft/60;
   const circ=2*Math.PI*60;
-  const urgentColor=S.eTimeLeft<=10?'#ef4444':'var(--accent)';
-  const timerRow=mkDiv('','display:flex;align-items:center;justify-content:center;margin-bottom:14px');
+  const isRest=S.eRestPhase||false;
+  const urgentColor=isRest?'var(--blue)':S.eTimeLeft<=10?'#ef4444':'var(--green)';
+  const timerRow=mkDiv('','display:flex;align-items:center;justify-content:center;margin-bottom:10px');
   timerRow.innerHTML=`<svg width="130" height="130" style="transform:rotate(-90deg)">
     <circle cx="65" cy="65" r="60" fill="none" stroke="var(--border)" stroke-width="6"/>
     <circle cx="65" cy="65" r="60" fill="none" stroke="${urgentColor}" stroke-width="6"
       stroke-dasharray="${circ}" stroke-dashoffset="${circ*(1-prog)}" stroke-linecap="round" style="transition:stroke-dashoffset .5s linear"/>
   </svg>`;
   const timerInner=mkDiv('','position:absolute;text-align:center');
-  timerInner.innerHTML=`<div class="tf" style="font-size:30px;color:${urgentColor}">${S.eTimeLeft}</div><div style="color:var(--muted);font-size:9px">초 남음</div>`;
+  timerInner.innerHTML=`<div class="tf" style="font-size:30px;color:${urgentColor}">${S.eTimeLeft}</div>
+    <div style="color:var(--muted);font-size:9px">${isRest?'휴식':'초 남음'}</div>`;
   const timerWrap=mkDiv('','position:relative;display:flex;align-items:center;justify-content:center');
   timerWrap.appendChild(timerRow);
   timerWrap.appendChild(timerInner);
   wrap.appendChild(timerWrap);
 
-  // 지금 할 운동
-  const exCard=mkDiv('','background:var(--card);border-radius:16px;padding:18px;margin-bottom:10px;border:2px solid var(--accent);text-align:center');
-  exCard.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">지금 — ${S.eRound}분차</div>
-    <div class="tf" style="font-size:26px;color:var(--text);font-weight:900">${curEx}</div>
-    <div style="margin-top:8px;font-size:12px;color:var(--muted)">1분 안에 완료하고 쉬세요!</div>`;
-  wrap.appendChild(exCard);
+  if(isRest){
+    // 휴식 중
+    const restCard=mkDiv('','background:#eff6ff;border-radius:16px;padding:18px;margin-bottom:10px;border:2px solid var(--blue);text-align:center');
+    restCard.innerHTML=`<div style="font-size:22px;font-weight:900;color:var(--blue);margin-bottom:6px">😮‍💨 휴식 중</div>
+      <div style="font-size:13px;color:var(--muted)">${S.eTimeLeft}초 후 ${S.eRound}라운드 시작!</div>`;
+    wrap.appendChild(restCard);
+    // 다음 라운드 운동 미리보기
+    const previewCard=mkDiv('','background:var(--card);border-radius:14px;padding:14px;margin-bottom:10px');
+    previewCard.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:700">다음 라운드 운동</div>
+      ${exercises.map((ex,i)=>`<div style="padding:6px 0;border-bottom:${i<exercises.length-1?'1px solid var(--border)':'none'};font-size:13px;font-weight:600">${i+1}. ${ex}</div>`).join('')}`;
+    wrap.appendChild(previewCard);
+  } else {
+    // 운동 중 - 전체 운동 목록 표시
+    const exCard=mkDiv('','background:var(--card);border-radius:16px;padding:14px;margin-bottom:10px;border:2px solid var(--green)');
+    exCard.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:700">🏋️ ${S.eRound}라운드 — 아래 운동을 모두 완료하세요!</div>
+      ${exercises.map((ex,i)=>`<div style="padding:8px 0;border-bottom:${i<exercises.length-1?'1px solid var(--border)':'none'};font-size:15px;font-weight:700">${i+1}. ${ex}</div>`).join('')}`;
+    wrap.appendChild(exCard);
 
-  // 다음 운동 예고 (마지막 아닐 때만)
-  if(S.eRound<totalRounds){
-    const nextCard=mkDiv('','background:var(--card2);border-radius:12px;padding:12px;text-align:center;margin-bottom:10px');
-    nextCard.innerHTML=`<div style="font-size:10px;color:var(--muted);margin-bottom:4px">다음 — ${S.eRound+1}분차</div>
-      <div style="font-size:16px;font-weight:700;color:var(--muted)">${nextEx}</div>`;
-    wrap.appendChild(nextCard);
+    // 완료 버튼
+    const doneBtn=mkBtn('btn-g','width:100%;padding:18px;font-size:18px;font-weight:900;margin-bottom:8px','✅ 완료! 휴식 시작',()=>{
+      S.eRestPhase=true;
+      S.eRound++;
+      if(S.eRound>totalRounds){ clearInterval(workInt); S.eDone=true; render(); return; }
+      S.eTimeLeft=60;
+      render();
+    });
+    wrap.appendChild(doneBtn);
   }
 
   // 진행 바
-  const prog2=mkDiv('','background:var(--border);border-radius:99px;height:6px;margin-top:10px;overflow:hidden');
+  const prog2=mkDiv('','background:var(--border);border-radius:99px;height:6px;margin-top:6px;overflow:hidden');
   const progFill=mkDiv('','background:var(--accent);border-radius:99px;height:100%;transition:width .5s',`width:${(S.eRound-1)/totalRounds*100}%`);
   prog2.appendChild(progFill);
-  wrap.appendChild(mkDiv('','font-size:11px;color:var(--muted);text-align:center;margin-top:8px',`${S.eRound}/${totalRounds} 라운드`));
+  wrap.appendChild(mkDiv('','font-size:11px;color:var(--muted);text-align:center;margin-top:6px',`${S.eRound-1}/${totalRounds} 라운드 완료`));
   wrap.appendChild(prog2);
 
   // 일시정지/재시작
-  const ctrl=mkDiv('','display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px');
+  const ctrl=mkDiv('','display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px');
   ctrl.appendChild(mkBtn('btn-s','',S.eRunning?'⏸ 일시정지':'▶ 재시작',()=>{
     if(S.eRunning){clearInterval(workInt);S.eRunning=false;}
     else{S.eRunning=true;startWorkTimer();}
@@ -1364,7 +1386,7 @@ function buildEmom(){
   }));
   ctrl.appendChild(mkBtn('btn-s','',ic.refresh+' 리셋',()=>{
     clearInterval(workInt);
-    setState({eTimeLeft:60,eRound:1,eRunning:false,eDone:false,eExIdx:0});
+    setState({eTimeLeft:60,eRound:1,eRunning:false,eDone:false,eExIdx:0,eRestPhase:false});
   }));
   wrap.appendChild(ctrl);
 
