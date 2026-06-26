@@ -768,6 +768,10 @@ function buildLogin(){
         wrap.appendChild(mkDiv('','background:var(--card);border-radius:14px;padding:20px;text-align:center;color:var(--muted);font-size:13px;margin-bottom:14px','아직 공개된 WOD가 없습니다.<br>선생님께 문의해주세요 😊'));
         wrap.appendChild(mkBtn('btn-s','','← 뒤로',()=>setState({lStep:1,lErr:'',wodListLoaded:false,wodListReady:false})));
       } else {
+        // WOD가 1개면 자동 선택
+        if(visibleWods.length===1 && !S.lWodId){
+          S.lWodId=visibleWods[0].id;
+        }
         visibleWods.forEach(w=>{
           const tl=w.timeLimit||(w.timeLimitMin||10)*60+(w.timeLimitSec||0);
           const isInd=w.teamMode==='individual';
@@ -2655,7 +2659,10 @@ function buildAdminWodForm(){
     row.innerHTML=`<div style="display:flex;gap:4px;align-items:center;margin-bottom:5px">
       <span style="color:var(--accent);font-weight:700;min-width:18px;font-size:11px">${i+1}.</span>`;
     const nameWrap=mkDiv('','display:flex;gap:4px;flex:1;align-items:center');
-    const ei=mkInp('inp',{type:'text',value:ex,placeholder:'운동 이름'},v=>{S.adminWod.exercises[i]=v;});
+    const ei=mkInp('inp',{type:'text',value:ex,placeholder:'운동 이름'},v=>{
+      if(!S.adminWod) return;
+      S.adminWod.exercises[i]=v;
+    });
     ei.style.flex='1';
     nameWrap.appendChild(ei);
     nameWrap.appendChild(mkBtn('','background:none;border:none;color:var(--red);padding:4px',ic.trash,()=>{
