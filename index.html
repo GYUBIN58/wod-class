@@ -2578,28 +2578,32 @@ function buildAdminWod(){
 
 function syncAdminWodInputs(){
   if(!S.adminWod) return;
-  // 제목
   const titleInp=document.querySelector('#admin-wod-title');
   if(titleInp) S.adminWod.title=titleInp.value;
-  // 운동 목록
-  document.querySelectorAll('.admin-ex-inp').forEach((inp,i)=>{
-    if(S.adminWod.exercises) S.adminWod.exercises[i]=inp.value;
-  });
+
+  // 운동 목록 - DOM에서 직접 읽기
+  const exInps=document.querySelectorAll('.admin-ex-inp');
+  if(exInps.length>0){
+    // DOM 인풋 수만큼 exercises 배열 맞춤
+    S.adminWod.exercises=Array.from(exInps).map(inp=>inp.value||'');
+  }
+
   // 운동 설명
-  document.querySelectorAll('.admin-ex-desc').forEach((ta,i)=>{
+  const descTas=document.querySelectorAll('.admin-ex-desc');
+  if(descTas.length>0){
     if(!S.adminWod.exerciseDescs) S.adminWod.exerciseDescs=[];
-    S.adminWod.exerciseDescs[i]=ta.value;
-  });
-  // 시간
+    descTas.forEach((ta,i)=>{ S.adminWod.exerciseDescs[i]=ta.value; });
+  }
+
   const minInp=document.querySelector('#admin-wod-min');
   const secInp=document.querySelector('#admin-wod-sec');
   if(minInp) S.adminWod.timeLimitMin=Math.max(0,+minInp.value);
   if(secInp) S.adminWod.timeLimitSec=Math.min(59,Math.max(0,+secInp.value));
   if(minInp||secInp) S.adminWod.timeLimit=(S.adminWod.timeLimitMin||0)*60+(S.adminWod.timeLimitSec||0);
-  // 세트수
+
   const setsInp=document.querySelector('#admin-wod-sets');
   if(setsInp) S.adminWod.targetSets=Math.max(1,+setsInp.value);
-  // EMOM 라운드
+
   const roundsInp=document.querySelector('#admin-wod-rounds');
   if(roundsInp) S.adminWod.emomRounds=Math.max(1,+roundsInp.value);
 }
@@ -2653,11 +2657,11 @@ function buildAdminWodForm(){
     const c4=mkDiv('card','');
     c4.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:9px">제한 시간</div>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-        <input class="inp" type="number" min="0" max="99" value="${curMin}" style="text-align:center;font-size:24px;font-weight:900"
-          oninput="S.adminWod.timeLimitMin=Math.max(0,+this.value);S.adminWod.timeLimit=S.adminWod.timeLimitMin*60+(S.adminWod.timeLimitSec||0);render()"/>
+        <input id="admin-wod-min" class="inp" type="number" min="0" max="99" value="${curMin}" style="text-align:center;font-size:24px;font-weight:900"
+          oninput="S.adminWod.timeLimitMin=Math.max(0,+this.value);S.adminWod.timeLimit=S.adminWod.timeLimitMin*60+(S.adminWod.timeLimitSec||0)"/>
         <span style="font-size:18px;font-weight:700">:</span>
-        <input class="inp" type="number" min="0" max="59" value="${curSec}" style="text-align:center;font-size:24px;font-weight:900"
-          oninput="S.adminWod.timeLimitSec=Math.min(59,Math.max(0,+this.value));S.adminWod.timeLimit=(S.adminWod.timeLimitMin||0)*60+S.adminWod.timeLimitSec;render()"/>
+        <input id="admin-wod-sec" class="inp" type="number" min="0" max="59" value="${curSec}" style="text-align:center;font-size:24px;font-weight:900"
+          oninput="S.adminWod.timeLimitSec=Math.min(59,Math.max(0,+this.value));S.adminWod.timeLimit=(S.adminWod.timeLimitMin||0)*60+S.adminWod.timeLimitSec"/>
       </div>
       <div style="display:flex;gap:8px"><div style="flex:1;text-align:center;color:var(--muted);font-size:10px">분</div><div style="width:20px"></div><div style="flex:1;text-align:center;color:var(--muted);font-size:10px">초</div></div>
       <div style="margin-top:6px;text-align:center;color:var(--accent);font-size:13px;font-weight:700">= ${fmtTime((aw.timeLimitMin||0)*60+(aw.timeLimitSec||0))} AMRAP</div>`;
@@ -2666,7 +2670,7 @@ function buildAdminWodForm(){
     const c4=mkDiv('card','');
     c4.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:7px">총 라운드 수 (분)</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:9px">운동 목록이 ${aw.exercises?.length||0}개면 자동으로 ${aw.exercises?.length||0}분 EMOM이 됩니다. 더 길게 하려면 늘려주세요.</div>`;
-    const ri=mkInp('inp',{type:'number',value:aw.emomRounds||aw.exercises?.length||3},v=>{S.adminWod.emomRounds=Math.max(1,+v);});
+    const ri=mkInp('inp',{type:'number',value:aw.emomRounds||aw.exercises?.length||3,id:'admin-wod-rounds'},v=>{S.adminWod.emomRounds=Math.max(1,+v);});
     ri.style.cssText='font-size:28px;font-weight:900;text-align:center';
     c4.appendChild(ri);
     c4.innerHTML+=`<div style="margin-top:8px;text-align:center;color:var(--accent);font-size:13px;font-weight:700">= ${aw.emomRounds||aw.exercises?.length||3}분 EMOM</div>`;
@@ -2674,7 +2678,7 @@ function buildAdminWodForm(){
   } else {
     const c4=mkDiv('card','');
     c4.innerHTML='<div style="font-weight:700;font-size:13px;margin-bottom:7px">목표 세트 수</div>';
-    const si=mkInp('inp',{type:'number',value:aw.targetSets||3},v=>{S.adminWod.targetSets=Math.max(1,+v);});
+    const si=mkInp('inp',{type:'number',value:aw.targetSets||3,id:'admin-wod-sets'},v=>{S.adminWod.targetSets=Math.max(1,+v);});
     wrap.appendChild(c4);
     c4.appendChild(si);
   }
@@ -2729,7 +2733,8 @@ function buildAdminWodForm(){
   // 저장
   const saveBtnRow=mkDiv('','display:flex;gap:6px');
   saveBtnRow.appendChild(mkBtn('btn-p','flex:1','💾 WOD 저장',()=>{
-    syncAdminWodInputs(); // 저장 전 모든 입력값 동기화
+    syncAdminWodInputs();
+    console.log('저장 직전 exercises:', JSON.stringify(S.adminWod.exercises));
     const isNew=S.adminWodEditId==='new';
     const saved={...S.adminWod,id:isNew?Date.now().toString():S.adminWod.id,date:new Date().toISOString().slice(0,10)};
     saved.timeLimit=(saved.timeLimitMin||0)*60+(saved.timeLimitSec||0);
