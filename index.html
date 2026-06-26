@@ -359,9 +359,11 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 // 상수 & 스토리지
 // ═══════════════════════════════════════════
 const ALL_CLASSES = [
+  "1-1","1-2","1-3","1-4","1-5","1-6","1-7","1-8","1-9","1-10","1-11","1-12","1-13","1-14","1-15","1-16",
   "2-1","2-2","2-3","2-4","2-5","2-6","2-7","2-8","2-9","2-10","2-11","2-12","2-13","2-14","2-15","2-16",
   "3-1","3-2","3-3","3-4","3-5","3-6","3-7","3-8","3-9","3-10","3-11","3-12","3-13","3-14","3-15","3-16"
 ];
+const CLASSES_1 = ["1-1","1-2","1-3","1-4","1-5","1-6","1-7","1-8","1-9","1-10","1-11","1-12","1-13","1-14","1-15","1-16"];
 const CLASSES_2 = ["2-1","2-2","2-3","2-4","2-5","2-6","2-7","2-8","2-9","2-10","2-11","2-12","2-13","2-14","2-15","2-16"];
 const CLASSES_3 = ["3-1","3-2","3-3","3-4","3-5","3-6","3-7","3-8","3-9","3-10","3-11","3-12","3-13","3-14","3-15","3-16"];
 const makeTeams = n => Array.from({length:n},(_,i)=>`${i+1}팀`);
@@ -821,9 +823,9 @@ function buildLogin(){
       wrap.appendChild(lbl('반 선택'));
       // 학년 탭
       const gradeTab=mkDiv('','display:flex;gap:6px;margin-bottom:8px');
-      ['2학년','3학년'].forEach((g,gi)=>{
+      ['1학년','2학년','3학년'].forEach((g,gi)=>{
         const isOn=(S.lGrade||'2')===(gi===0?'2':'3');
-        gradeTab.appendChild(mkBtn(`chip ${isOn?'on':''}`,`flex:1;font-size:13px;padding:9px`,g,()=>setState({lGrade:gi===0?'2':'3',lCls:'',lErr:''})));
+        gradeTab.appendChild(mkBtn(`chip ${isOn?'on':''}`,`flex:1;font-size:13px;padding:9px`,g,()=>setState({lGrade:gi===0?'1':gi===1?'2':'3',lCls:'',lErr:''})));
       });
       wrap.appendChild(gradeTab);
       const gradeClasses=myClasses.filter(c=>c.startsWith((S.lGrade||'2')+'-'));
@@ -2806,7 +2808,7 @@ function buildAdminClasses(){
 
   // 학년 탭
   const gradeTabRow=mkDiv('','display:flex;gap:6px;margin-bottom:9px');
-  ['2학년','3학년'].forEach((g,gi)=>{
+  ['1학년','2학년','3학년'].forEach((g,gi)=>{
     const grade=gi===0?'2':'3';
     const isOn=(S.adminClassGrade||'2')===grade;
     gradeTabRow.appendChild(mkBtn(`chip ${isOn?'on':''}`,`flex:1;font-size:12px;padding:8px`,g,()=>{S.adminClassGrade=grade;render();}));
