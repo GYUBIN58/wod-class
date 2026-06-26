@@ -2576,8 +2576,33 @@ function buildAdminWod(){
   return wrap;
 }
 
-// ── 관리자: WOD 편집 폼 ──
-function buildAdminWodForm(){
+function syncAdminWodInputs(){
+  if(!S.adminWod) return;
+  // 제목
+  const titleInp=document.querySelector('#admin-wod-title');
+  if(titleInp) S.adminWod.title=titleInp.value;
+  // 운동 목록
+  document.querySelectorAll('.admin-ex-inp').forEach((inp,i)=>{
+    if(S.adminWod.exercises) S.adminWod.exercises[i]=inp.value;
+  });
+  // 운동 설명
+  document.querySelectorAll('.admin-ex-desc').forEach((ta,i)=>{
+    if(!S.adminWod.exerciseDescs) S.adminWod.exerciseDescs=[];
+    S.adminWod.exerciseDescs[i]=ta.value;
+  });
+  // 시간
+  const minInp=document.querySelector('#admin-wod-min');
+  const secInp=document.querySelector('#admin-wod-sec');
+  if(minInp) S.adminWod.timeLimitMin=Math.max(0,+minInp.value);
+  if(secInp) S.adminWod.timeLimitSec=Math.min(59,Math.max(0,+secInp.value));
+  if(minInp||secInp) S.adminWod.timeLimit=(S.adminWod.timeLimitMin||0)*60+(S.adminWod.timeLimitSec||0);
+  // 세트수
+  const setsInp=document.querySelector('#admin-wod-sets');
+  if(setsInp) S.adminWod.targetSets=Math.max(1,+setsInp.value);
+  // EMOM 라운드
+  const roundsInp=document.querySelector('#admin-wod-rounds');
+  if(roundsInp) S.adminWod.emomRounds=Math.max(1,+roundsInp.value);
+}
   const wrap=mkDiv('','display:flex;flex-direction:column;gap:10px');
   const aw=S.adminWod||{...DEFAULT_WOD};
   const tid=S.user?.teacherId;
@@ -2587,21 +2612,21 @@ function buildAdminWodForm(){
   // 제목
   const c1=mkDiv('card','');
   c1.innerHTML='<div style="font-weight:700;font-size:13px;margin-bottom:7px">WOD 제목</div>';
-  c1.appendChild(mkInp('inp',{type:'text',value:aw.title||''},v=>{S.adminWod.title=v;}));
+  c1.appendChild(mkInp('inp',{type:'text',value:aw.title||'',id:'admin-wod-title'},v=>{S.adminWod.title=v;}));
   wrap.appendChild(c1);
 
   // 운동 모드 (개인전/팀전)
   const c2=mkDiv('card','border:1px solid #f9731630');
   c2.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:9px">운동 모드</div>
     <div style="display:flex;gap:6px;margin-bottom:10px">
-      <button class="chip ${(aw.teamMode||'team')==='individual'?'on':''}" style="flex:1;font-size:12px" onclick="S.adminWod.teamMode='individual';render()">🏃 개인전</button>
-      <button class="chip ${(aw.teamMode||'team')==='team'?'on':''}" style="flex:1;font-size:12px" onclick="S.adminWod.teamMode='team';if(!S.adminWod.teamCount)S.adminWod.teamCount=8;render()">👥 팀전</button>
+      <button class="chip ${(aw.teamMode||'team')==='individual'?'on':''}" style="flex:1;font-size:12px" onclick="syncAdminWodInputs();S.adminWod.teamMode='individual';render()">🏃 개인전</button>
+      <button class="chip ${(aw.teamMode||'team')==='team'?'on':''}" style="flex:1;font-size:12px" onclick="syncAdminWodInputs();S.adminWod.teamMode='team';if(!S.adminWod.teamCount)S.adminWod.teamCount=8;render()">👥 팀전</button>
     </div>`;
   if((aw.teamMode||'team')==='team'){
     c2.innerHTML+=`<div style="color:var(--muted);font-size:10px;margin-bottom:6px">팀 수</div>`;
     const tg=mkDiv('','display:grid;grid-template-columns:repeat(5,1fr);gap:3px');
     [6,7,8,9,10,11,12,13,14,15,16].forEach(n=>{
-      tg.appendChild(mkBtn(`chip ${(aw.teamCount||8)===n?'on':''}`,`padding:6px 1px;font-size:11px;font-weight:700`,''+n,()=>{S.adminWod.teamCount=n;render();}));
+      tg.appendChild(mkBtn(`chip ${(aw.teamCount||8)===n?'on':''}`,`padding:6px 1px;font-size:11px;font-weight:700`,''+n,()=>{syncAdminWodInputs();S.adminWod.teamCount=n;render();}));
     });
     c2.appendChild(tg);
   }
@@ -2611,9 +2636,9 @@ function buildAdminWodForm(){
   const c3=mkDiv('card','');
   c3.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:9px">운동 방식</div>
     <div style="display:flex;gap:6px;margin-bottom:8px">
-      <button class="chip ${aw.type==='AMRAP'?'on':''}" style="flex:1" onclick="S.adminWod.type='AMRAP';render()">AMRAP</button>
-      <button class="chip ${aw.type==='ForTime'?'on':''}" style="flex:1" onclick="S.adminWod.type='ForTime';render()">For Time</button>
-      <button class="chip ${aw.type==='EMOM'?'on':''}" style="flex:1" onclick="S.adminWod.type='EMOM';render()">EMOM</button>
+      <button class="chip ${aw.type==='AMRAP'?'on':''}" style="flex:1" onclick="syncAdminWodInputs();S.adminWod.type='AMRAP';render()">AMRAP</button>
+      <button class="chip ${aw.type==='ForTime'?'on':''}" style="flex:1" onclick="syncAdminWodInputs();S.adminWod.type='ForTime';render()">For Time</button>
+      <button class="chip ${aw.type==='EMOM'?'on':''}" style="flex:1" onclick="syncAdminWodInputs();S.adminWod.type='EMOM';render()">EMOM</button>
     </div>
     <div style="font-size:11px;color:var(--muted);line-height:1.6;background:var(--card2);border-radius:9px;padding:8px 10px">
       ${aw.type==='AMRAP'?'⏱ 제한 시간 안에 운동을 최대한 많이 반복. 세트 수로 기록합니다.':aw.type==='EMOM'?'🕐 Every Minute On the Minute — 매 분 시작할 때마다 새로운 운동을 합니다. 남은 시간은 휴식!':'🎯 목표 세트를 최대한 빠르게 완료. 걸린 시간으로 기록합니다.'}
@@ -2663,9 +2688,11 @@ function buildAdminWodForm(){
       if(!S.adminWod) return;
       S.adminWod.exercises[i]=v;
     });
+    ei.className='inp admin-ex-inp';
     ei.style.flex='1';
     nameWrap.appendChild(ei);
     nameWrap.appendChild(mkBtn('','background:none;border:none;color:var(--red);padding:4px',ic.trash,()=>{
+      syncAdminWodInputs();
       S.adminWod.exercises.splice(i,1);
       if(!S.adminWod.exerciseDescs) S.adminWod.exerciseDescs=[];
       S.adminWod.exerciseDescs.splice(i,1);
@@ -2676,7 +2703,7 @@ function buildAdminWodForm(){
     // 운동 설명 입력
     const descLabel=mkDiv('','font-size:10px;color:var(--muted);margin-bottom:3px','💡 운동 설명 (시뮬레이션에 표시됨)');
     const di=document.createElement('textarea');
-    di.className='inp';
+    di.className='inp admin-ex-desc';
     di.placeholder='예) 엎드려서 팔굽혀펴기 자세 → 팔을 구부렸다 펴기 → 10회 반복';
     di.value=(aw.exerciseDescs||[])[i]||'';
     di.style.cssText='width:100%;height:60px;resize:none;font-size:11px;line-height:1.5';
@@ -2690,15 +2717,16 @@ function buildAdminWodForm(){
   });
   const addRow=mkDiv('','display:flex;gap:4px;margin-top:4px');
   const newExInp=mkInp('inp',{type:'text',placeholder:'운동 추가',value:S.adminNewEx||''},v=>{S.adminNewEx=v;});
-  newExInp.addEventListener('keydown',e=>{if(e.key==='Enter'&&S.adminNewEx?.trim()){S.adminWod.exercises=[...(S.adminWod.exercises||[]),S.adminNewEx.trim()];S.adminNewEx='';render();}});
+  newExInp.addEventListener('keydown',e=>{if(e.key==='Enter'&&S.adminNewEx?.trim()){syncAdminWodInputs();S.adminWod.exercises=[...(S.adminWod.exercises||[]),S.adminNewEx.trim()];S.adminNewEx='';render();}});
   addRow.appendChild(newExInp);
-  addRow.appendChild(mkBtn('btn-g','width:42px;border-radius:10px',ic.plus,()=>{if(S.adminNewEx?.trim()){S.adminWod.exercises=[...(S.adminWod.exercises||[]),S.adminNewEx.trim()];S.adminNewEx='';render();}}));
+  addRow.appendChild(mkBtn('btn-g','width:42px;border-radius:10px',ic.plus,()=>{if(S.adminNewEx?.trim()){syncAdminWodInputs();S.adminWod.exercises=[...(S.adminWod.exercises||[]),S.adminNewEx.trim()];S.adminNewEx='';render();}}));
   c5.appendChild(addRow);
   wrap.appendChild(c5);
 
   // 저장
   const saveBtnRow=mkDiv('','display:flex;gap:6px');
   saveBtnRow.appendChild(mkBtn('btn-p','flex:1','💾 WOD 저장',()=>{
+    syncAdminWodInputs(); // 저장 전 모든 입력값 동기화
     const isNew=S.adminWodEditId==='new';
     const saved={...S.adminWod,id:isNew?Date.now().toString():S.adminWod.id,date:new Date().toISOString().slice(0,10)};
     saved.timeLimit=(saved.timeLimitMin||0)*60+(saved.timeLimitSec||0);
