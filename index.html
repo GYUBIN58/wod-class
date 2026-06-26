@@ -785,7 +785,7 @@ function buildLogin(){
               <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">
                 <span class="badge bo">${w.type}</span>
                 <span class="badge ${isInd?'bg':'bb'}">${isInd?'🏃 개인전':'👥 팀전'}</span>
-                ${w.type==='AMRAP'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${fmtTime(tl)}</span>`:w.type==='EMOM'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${w.emomRounds||w.exercises.length}분</span>`:`<span class="badge" style="background:var(--card2);color:var(--muted)">${w.targetSets}세트</span>`}
+                ${w.type==='AMRAP'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${fmtTime(tl)}</span>`:w.type==='EMOM'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${w.emomRounds||3}라운드</span>`:`<span class="badge" style="background:var(--card2);color:var(--muted)">${w.targetSets}세트</span>`}
               </div>
               <div>${w.exercises.map((ex,i)=>`<div style="font-size:11px;color:var(--muted);padding:1px 0">${i+1}. ${ex}</div>`).join('')}</div>
             </div>
@@ -1038,7 +1038,7 @@ function buildHome(){
     <span class="badge ${wod.type==='AMRAP'?'bo':wod.type==='EMOM'?'bg':'bb'}">${wod.type}</span>
   </div>
   <div style="background:var(--card2);border-radius:9px;padding:9px;margin-bottom:9px">
-    ${wod.type==='AMRAP'?`<div style="color:var(--accent);font-weight:700;font-size:11px;margin-bottom:5px">⏱ ${fmtTime(tl)} AMRAP — 최대한 많이 반복!</div>`:wod.type==='EMOM'?`<div style="color:var(--green);font-weight:700;font-size:11px;margin-bottom:5px">🕐 ${wod.emomRounds||wod.exercises.length}라운드 EMOM — 완료 후 남은 시간은 휴식!</div>`:`<div style="color:var(--blue);font-weight:700;font-size:11px;margin-bottom:5px">🎯 ${wod.targetSets}세트 For Time — 최대한 빠르게!</div>`}
+    ${wod.type==='AMRAP'?`<div style="color:var(--accent);font-weight:700;font-size:11px;margin-bottom:5px">⏱ ${fmtTime(tl)} AMRAP — 최대한 많이 반복!</div>`:wod.type==='EMOM'?`<div style="color:var(--green);font-weight:700;font-size:11px;margin-bottom:5px">🕐 ${wod.emomRounds||3}라운드 EMOM — 완료 후 남은 시간은 휴식!</div>`:`<div style="color:var(--blue);font-weight:700;font-size:11px;margin-bottom:5px">🎯 ${wod.targetSets}세트 For Time — 최대한 빠르게!</div>`}
     ${wod.exercises.map((ex,i)=>`<div style="padding:3px 0;${i<wod.exercises.length-1?'border-bottom:1px solid var(--border)':''}display:flex;gap:5px;font-size:12px"><span style="color:var(--accent);font-weight:700;min-width:16px">${wod.type==='EMOM'?`${i+1}분:`:`${i+1}.`}</span>${ex}</div>`).join('')}
   </div>`;
   if(myRec){
@@ -1085,7 +1085,7 @@ function buildWorkoutReady(){
   const typeDesc=wod.type==='AMRAP'
     ?`⏱ <b>${fmtTime(tl)}</b> 동안 아래 운동을 최대한 많이 반복해요!`
     :wod.type==='EMOM'
-    ?`🕐 아래 운동들을 모두 완료하고 완료 버튼을 누르세요! 남은 시간은 휴식! <b>${wod.emomRounds||wod.exercises.length}라운드</b> 진행합니다.`
+    ?`🕐 아래 운동들을 1분 안에 모두 완료하고 완료 버튼을 누르세요! 남은 시간은 휴식! <b>${wod.emomRounds||3}라운드</b> 반복합니다.`
     :`🎯 아래 운동을 <b>${wod.targetSets}세트</b> 최대한 빠르게 완료해요!`;
   c.innerHTML=`<div class="tf" style="font-size:18px;margin-bottom:4px">${wod.title}</div>
     <div style="display:flex;gap:5px;margin-bottom:8px">
@@ -1145,7 +1145,7 @@ function startWorkTimer(){
       S.aTimeLeft--; render();
     },1000);
   } else if(wod.type==='EMOM'){
-    const totalRounds=wod.emomRounds||wod.exercises.length;
+    const totalRounds=wod.emomRounds||3;
     workInt=setInterval(()=>{
       if(S.eTimeLeft<=1){
         if(S.eRestPhase){
@@ -1524,7 +1524,7 @@ function buildSaveRecord(){
       </div>`;
     }
   } else if(isEmom){
-    const totalRounds=wod.emomRounds||wod.exercises.length;
+    const totalRounds=wod.emomRounds||3;
     c.innerHTML=`<div style="color:var(--muted);font-size:11px;margin-bottom:6px">완료 라운드</div>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         <button class="btn-s" style="width:44px;height:44px;border-radius:11px" onclick="S.srSets=Math.max(0,S.srSets-1);render()">${ic.minus}</button>
@@ -2540,7 +2540,7 @@ function buildAdminWod(){
         <div style="flex:1;font-weight:700;font-size:12px">${w.title}</div>
         <span class="badge bo">${w.type}</span>
       </div>
-      <div style="font-size:10px;color:var(--muted);margin-bottom:7px">${w.type==='AMRAP'?fmtTime(tl)+' AMRAP':w.type==='EMOM'?(w.emomRounds||w.exercises.length)+'분 EMOM':w.targetSets+'세트 For Time'} · ${w.teamMode==='individual'?'개인전':'팀전'}</div>`;
+      <div style="font-size:10px;color:var(--muted);margin-bottom:7px">${w.type==='AMRAP'?fmtTime(tl)+' AMRAP':w.type==='EMOM'?(w.emomRounds||3)+'라운드 EMOM':w.targetSets+'세트 For Time'} · ${w.teamMode==='individual'?'개인전':'팀전'}</div>`;
 
       const btnRow=mkDiv('','display:flex;gap:5px;flex-wrap:wrap');
       // 공개/비공개 토글
@@ -2670,7 +2670,7 @@ function buildAdminWodForm(){
       <button class="chip ${aw.type==='EMOM'?'on':''}" style="flex:1" onclick="syncAdminWodInputs();S.adminWod.type='EMOM';render()">EMOM</button>
     </div>
     <div style="font-size:11px;color:var(--muted);line-height:1.6;background:var(--card2);border-radius:9px;padding:8px 10px">
-      ${aw.type==='AMRAP'?'⏱ 제한 시간 안에 운동을 최대한 많이 반복. 세트 수로 기록합니다.':aw.type==='EMOM'?'🕐 Every Minute On the Minute — 매 분 시작할 때마다 새로운 운동을 합니다. 남은 시간은 휴식!':'🎯 목표 세트를 최대한 빠르게 완료. 걸린 시간으로 기록합니다.'}
+      ${aw.type==='AMRAP'?'⏱ 제한 시간 안에 운동을 최대한 많이 반복. 세트 수로 기록합니다.':aw.type==='EMOM'?'🕐 아래 운동들을 1분 안에 모두 완료 → 완료 버튼 누르기 → 남은 시간 휴식 → 다음 라운드! N라운드 반복합니다.':'🎯 목표 세트를 최대한 빠르게 완료. 걸린 시간으로 기록합니다.'}
     </div>`;
   wrap.appendChild(c3);
 
@@ -2690,12 +2690,12 @@ function buildAdminWodForm(){
     wrap.appendChild(c4);
   } else if(aw.type==='EMOM'){
     const c4=mkDiv('card','');
-    c4.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:7px">총 라운드 수 (분)</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:9px">운동 목록이 ${aw.exercises?.length||0}개면 자동으로 ${aw.exercises?.length||0}분 EMOM이 됩니다. 더 길게 하려면 늘려주세요.</div>`;
-    const ri=mkInp('inp',{type:'number',value:aw.emomRounds||aw.exercises?.length||3,id:'admin-wod-rounds'},v=>{S.adminWod.emomRounds=Math.max(1,+v);});
+    c4.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:7px">총 라운드 수</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:9px">운동 목록을 1분 안에 완료하고 이걸 몇 라운드 반복할지 설정하세요.</div>`;
+    const ri=mkInp('inp',{type:'number',value:aw.emomRounds||3,id:'admin-wod-rounds'},v=>{S.adminWod.emomRounds=Math.max(1,+v);});
     ri.style.cssText='font-size:28px;font-weight:900;text-align:center';
     c4.appendChild(ri);
-    c4.innerHTML+=`<div style="margin-top:8px;text-align:center;color:var(--accent);font-size:13px;font-weight:700">= ${aw.emomRounds||aw.exercises?.length||3}분 EMOM</div>`;
+    c4.innerHTML+=`<div style="margin-top:8px;text-align:center;color:var(--green);font-size:13px;font-weight:700">= ${aw.emomRounds||3}라운드 × 1분</div>`;
     wrap.appendChild(c4);
   } else {
     const c4=mkDiv('card','');
