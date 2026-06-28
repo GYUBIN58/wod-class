@@ -85,15 +85,6 @@ window.fbSaveTeacher = async function(teacher) {
   }
 };
 
-// WOD 저장
-window.fbSaveWod = async function(tid, wod) {
-  try {
-    await setDoc(doc(db, 'wods', tid), wod);
-  } catch(e) {
-    console.warn('Firestore WOD 저장 실패:', e);
-  }
-};
-
 // WOD 목록 즉시 불러오기
 window.fbLoadWodList = async function(tid) {
   try {
@@ -440,7 +431,7 @@ window._startSim=function(wId){
 let S = {
   screen: 'schoolSelect', tab:'home', user:null,
   // 학교 선택
-  superAdminMode:false,
+  superAdminMode:false, superAdminInput:false, superAdminCode:'', superAdminErr:'',
   selectedSchoolId: stor.get('selected_school_id', 'wolchon'),
   schoolAddMode: false, schoolAddName:'', schoolAddCode:'', schoolAddErr:'',
   records: stor.get((stor.get('selected_school_id','wolchon'))+'_wod_records',[]),
@@ -646,22 +637,22 @@ function buildSchoolSelect(){
   if(!S.schoolAddMode){
     wrap.appendChild(mkDiv('','margin-top:6px'));
     wrap.appendChild(mkBtn('btn-s','','+ 새 학교 추가',()=>setState({schoolAddMode:true,schoolAddName:'',schoolAddCode:'',schoolAddErr:''})));
-    // 슈퍼 관리자 버튼
-    if(!S.superAdminMode){
+
+    if(S.superAdminInput){
+      const box=mkDiv('card','margin-top:10px;border:1px solid var(--accent)30');
+      box.appendChild(mkDiv('','font-weight:700;font-size:13px;margin-bottom:8px','🔐 슈퍼 관리자 코드'));
+      const pi=mkInp('inp',{type:'password',placeholder:'코드 입력'},v=>{S.superAdminCode=v;});
+      pi.addEventListener('keydown',e=>{if(e.key==='Enter')doSuperAdminLogin();});
+      box.appendChild(pi);
+      if(S.superAdminErr) box.appendChild(mkDiv('','color:var(--red);font-size:12px;margin-top:6px',S.superAdminErr));
+      const row=mkDiv('','display:flex;gap:6px;margin-top:8px');
+      row.appendChild(mkBtn('btn-p','flex:1','확인',doSuperAdminLogin));
+      row.appendChild(mkBtn('btn-s','flex:1','취소',()=>setState({superAdminInput:false,superAdminCode:'',superAdminErr:''})));
+      box.appendChild(row);
+      wrap.appendChild(box);
+    } else if(!S.superAdminMode){
       wrap.appendChild(mkDiv('','margin-top:8px'));
-      wrap.appendChild(mkBtn('','width:100%;background:none;border:1px dashed var(--border);border-radius:12px;padding:10px;font-size:11px;color:var(--muted)','🔐 슈퍼 관리자',()=>{
-        const pw=prompt('슈퍼 관리자 코드를 입력하세요:');
-        if(!pw) return;
-        hashCode(pw).then(h=>{
-          if(h===MASTER_CODE_HASH){
-            S.superAdminMode=true;
-            showToast('슈퍼 관리자 모드 활성화 ✅');
-            render();
-          } else {
-            alert('코드가 올바르지 않습니다.');
-          }
-        });
-      }));
+      wrap.appendChild(mkBtn('','width:100%;background:none;border:1px dashed var(--border);border-radius:12px;padding:10px;font-size:11px;color:var(--muted)','🔐 슈퍼 관리자',()=>setState({superAdminInput:true,superAdminCode:'',superAdminErr:''})));
     } else {
       wrap.appendChild(mkDiv('','margin-top:8px'));
       wrap.appendChild(mkBtn('btn-p','','🔐 슈퍼 관리자 대시보드',()=>setState({screen:'superAdmin'})));
@@ -672,6 +663,18 @@ function buildSchoolSelect(){
 
   wrap.appendChild(mkDiv('','text-align:center;color:var(--border);font-size:10px;margin-top:24px','WOD CLASS · 학교 체육수업 관리 시스템'));
   return wrap;
+}
+
+function doSuperAdminLogin(){
+  if(!S.superAdminCode?.trim()){setState({superAdminErr:'코드를 입력해주세요'});return;}
+  hashCode(S.superAdminCode).then(h=>{
+    if(h===MASTER_CODE_HASH){
+      setState({superAdminMode:true,superAdminInput:false,superAdminCode:'',superAdminErr:''});
+      showToast('슈퍼 관리자 모드 활성화 ✅');
+    } else {
+      setState({superAdminErr:'코드가 올바르지 않습니다'});
+    }
+  });
 }
 
 function doAddSchool(){
@@ -735,21 +738,28 @@ function buildSuperAdmin(){
 
     // 해당 학교로 이동 버튼
     const btnRow=mkDiv('','display:flex;gap:6px');
-    btnRow.appendChild(mkBtn('btn-p','flex:1;font-size:12px','입장',()=>{
+    btnRow.appendChild(mkBtn('btn-p','flex:1;font-size:12px','입장',async ()=>{
       S.selectedSchoolId=sid;
       stor.set('selected_school_id',sid);
       S.records=stor.get(sid+'_wod_records',[]);
+      if(window.fbLoadAll) await window.fbLoadAll();
       setState({screen:'login',user:null,lStep:1,lAdminMode:true,lTeacherId:'',lAdminId:'',lAdminPw:''});
     }));
     // 학교 삭제 (wolchon은 삭제 불가)
     if(sid!=='wolchon'){
-      btnRow.appendChild(mkBtn('btn-d','flex:0.4;font-size:12px',ic.trash,()=>{
-        if(!confirm(`${school.name}을 삭제하시겠습니까? 모든 데이터가 사라집니다.`)) return;
-        const list=getSchools().filter(s=>s.id!==sid);
-        saveSchools(list);
-        showToast(`${school.name} 삭제됨`);
-        render();
-      }));
+      const delBtn=mkBtn('btn-d','flex:0.4;font-size:12px',ic.trash,()=>{
+        delBtn.textContent='확인?';
+        delBtn.onclick=()=>{
+          const list=getSchools().filter(s=>s.id!==sid);
+          saveSchools(list);
+          // localStorage 데이터도 삭제
+          const keys=['wod_records','exam_records_2학년','wod_current_by_teacher','teacher_classes','wod_history_by_teacher'];
+          keys.forEach(k=>stor.set(sid+'_'+k,null));
+          showToast(`${school.name} 삭제됨`);
+          render();
+        };
+      });
+      btnRow.appendChild(delBtn);
     }
     card.appendChild(btnRow);
 
