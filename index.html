@@ -40,7 +40,8 @@ window._fbReady = true;
 // 기록 저장 (로컬 + Firestore)
 window.fbSaveRecord = async function(rec) {
   try {
-    await setDoc(doc(db, 'records', rec.id), rec);
+    const recWithSchool={...rec,schoolId:(window._S?.selectedSchoolId||'wolchon')};
+    await setDoc(doc(db, 'records', rec.id), recWithSchool);
   } catch(e) {
     console.warn('Firestore 저장 실패 (오프라인 저장됨):', e);
   }
@@ -50,7 +51,8 @@ window.fbSaveRecord = async function(rec) {
 window.fbSaveExamRecord = async function(rec) {
   if(!window._fbReady || !window._db) return false;
   try {
-    await setDoc(doc(db, 'exam_records', rec.id), rec);
+    const recWithSchool={...rec,schoolId:(window._S?.selectedSchoolId||'wolchon')};
+    await setDoc(doc(db, 'exam_records', rec.id), recWithSchool);
     return true;
   } catch(e) {
     console.warn('체력측정 기록 동기화 실패:', e);
@@ -1290,7 +1292,7 @@ function buildHome(){
   </div>
   <div style="background:var(--card2);border-radius:9px;padding:9px;margin-bottom:9px">
     ${wod.type==='AMRAP'?`<div style="color:var(--accent);font-weight:700;font-size:11px;margin-bottom:5px">⏱ ${fmtTime(tl)} AMRAP — 최대한 많이 반복!</div>`:wod.type==='EMOM'?`<div style="color:var(--green);font-weight:700;font-size:11px;margin-bottom:5px">🕐 ${wod.emomRounds||3}라운드 EMOM — 완료 후 남은 시간은 휴식!</div>`:`<div style="color:var(--blue);font-weight:700;font-size:11px;margin-bottom:5px">🎯 ${wod.targetSets}세트 For Time — 최대한 빠르게!</div>`}
-    ${wod.exercises.map((ex,i)=>`<div style="padding:3px 0;${i<wod.exercises.length-1?'border-bottom:1px solid var(--border)':''}display:flex;gap:5px;font-size:12px"><span style="color:var(--accent);font-weight:700;min-width:16px">${wod.type==='EMOM'?`${i+1}분:`:`${i+1}.`}</span>${ex}</div>`).join('')}
+    ${wod.exercises.map((ex,i)=>`<div style="padding:3px 0;${i<wod.exercises.length-1?'border-bottom:1px solid var(--border)':''}display:flex;gap:5px;font-size:12px"><span style="color:var(--accent);font-weight:700;min-width:16px">${i+1}.</span>${ex}</div>`).join('')}
   </div>`;
   if(myRec){
     wc.innerHTML+=`<div style="background:#22c55e15;border:1px solid #22c55e40;border-radius:9px;padding:9px;text-align:center">
@@ -1341,7 +1343,7 @@ function buildWorkoutReady(){
   c.innerHTML=`<div class="tf" style="font-size:18px;margin-bottom:4px">${wod.title}</div>
     <div style="display:flex;gap:5px;margin-bottom:8px">
       <span class="badge ${typeColor}">${wod.type}</span>
-      ${wod.type==='AMRAP'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${fmtTime(tl)}</span>`:wod.type==='EMOM'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.emomRounds||wod.exercises.length}분</span>`:`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.targetSets}세트</span>`}
+      ${wod.type==='AMRAP'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${fmtTime(tl)}</span>`:wod.type==='EMOM'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.emomRounds||3}라운드</span>`:`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.targetSets}세트</span>`}
     </div>
     <div style="background:var(--card2);border-radius:9px;padding:9px 11px;font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">${typeDesc}</div>
     ${wod.exercises.map((ex,i)=>`<div style="padding:6px 0;${i<wod.exercises.length-1?'border-bottom:1px solid var(--border)':''}display:flex;gap:6px;font-size:13px"><span style="color:var(--accent);font-weight:700">${i+1}.</span>${ex}</div>`).join('')}`;
