@@ -1961,7 +1961,7 @@ function buildSaved(){
 function buildRankOnly(){
   const wrap=mkDiv('','min-height:100vh;background:var(--bg);display:flex;flex-direction:column');
   const hdr=mkDiv('','background:var(--card);border-bottom:1px solid var(--border);padding:11px 14px;display:flex;align-items:center;gap:10px');
-  hdr.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px',ic.back,()=>setState({screen:'schoolSelect'})));
+  hdr.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px',ic.back,()=>setState({screen:'login'})));
   hdr.appendChild(mkDiv('tf','font-size:18px;color:var(--accent)','🏆 순위 보기'));
   wrap.appendChild(hdr);
 
@@ -2170,6 +2170,7 @@ function buildExam(){
       const myRank=recs.findIndex(r=>r.id===S.examResult?.id)+1;
       sc.appendChild(mkDiv('','font-size:15px;font-weight:700;color:var(--purple);margin-bottom:6px',`${S.examCls} 순위: ${myRank}위 / ${recs.length}명`));
       sc.appendChild(mkBtn('','width:100%;max-width:400px;padding:40px 16px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:white;border:none;border-radius:20px;font-size:44px;font-weight:900;cursor:pointer;font-family:"Black Han Sans",sans-serif;margin-top:20px;margin-bottom:10px;min-height:140px','다음 학생 →',()=>{
+        if(window._wakeLock){ window._wakeLock.release(); window._wakeLock=null; }
         S.examPhase='input'; S.examName=''; S.examCls=S.examCls; S.examStartTime=null; S.examEndTime=null; S.examErr='';
         save();
         const root2=document.getElementById('root'); root2.innerHTML=''; root2.appendChild(buildExam());
