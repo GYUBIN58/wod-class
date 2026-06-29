@@ -668,7 +668,7 @@ function buildSchoolSelect(){
 function doSuperAdminLogin(){
   if(!S.superAdminCode?.trim()){setState({superAdminErr:'코드를 입력해주세요'});return;}
   hashCode(S.superAdminCode).then(h=>{
-    if(h===MASTER_CODE_HASH){
+    if(h===SUPER_ADMIN_HASH){
       setState({superAdminMode:true,superAdminInput:false,superAdminCode:'',superAdminErr:''});
       showToast('슈퍼 관리자 모드 활성화 ✅');
     } else {
@@ -680,7 +680,7 @@ function doSuperAdminLogin(){
 function doAddSchool(){
   if(!S.schoolAddName.trim()){setState({schoolAddErr:'학교 이름을 입력해주세요'});return;}
   hashCode(S.schoolAddCode||'').then(h=>{
-    if(h!==MASTER_CODE_HASH){setState({schoolAddErr:'관리자 코드가 틀렸습니다'});return;}
+    if(h!==SUPER_ADMIN_HASH){setState({schoolAddErr:'관리자 코드가 틀렸습니다'});return;}
     const schools=getSchools();
     const id='school_'+Date.now();
     const newSchool={id,name:S.schoolAddName.trim(),createdAt:new Date().toISOString()};
@@ -1146,7 +1146,8 @@ function buildLogin(){
 
 // ── 마스터 코드 해시 검증 (코드 원문을 소스에 노출하지 않음) ──
 // 접근 코드의 SHA-256 해시값
-const MASTER_CODE_HASH='02c3901c7449800c23c8c6550daba39994b46bcac56c023bcf6e8513fee75747';
+const MASTER_CODE_HASH='287ee01c1bb5fab6c456f20a1c0459b6d05e26851fa3be5da36e0e816c354db1'; // 교사 회원가입 코드
+const SUPER_ADMIN_HASH='02c3901c7449800c23c8c6550daba39994b46bcac56c023bcf6e8513fee75747'; // 슈퍼 관리자 코드
 async function hashCode(str){
   const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
