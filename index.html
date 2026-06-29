@@ -473,7 +473,7 @@ let S = {
   adminClearTarget:'all', adminConfirm:false,
   adminFilterCls:'all', adminFilterMode:'all',
   adminExpandRecord:null,
-  adminClassList:null, adminClassSaving:false, adminClassGrade:'2',
+  adminClassList:null, adminClassSaving:false, adminClassGrade:'1',
 };
 
 function save(){ stor.set(schoolKey('wod_records'),S.records); }
@@ -3043,7 +3043,7 @@ function buildAdminClasses(){
   ['1학년','2학년','3학년'].forEach((g,gi)=>{
     const grade=gi===0?'1':gi===1?'2':'3';
     const isOn=(S.adminClassGrade||'1')===grade;
-    gradeTabRow.appendChild(mkBtn(`chip ${isOn?'on':''}`,`flex:1;font-size:12px;padding:8px`,g,()=>{S.adminClassGrade=grade;render();}));
+    gradeTabRow.appendChild(mkBtn(`chip ${isOn?'on':''}`,`flex:1;font-size:12px;padding:8px`,g,()=>setState({adminClassGrade:grade})));
   });
   info.appendChild(gradeTabRow);
 
