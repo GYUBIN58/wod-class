@@ -456,7 +456,7 @@ let S = {
   fSets:0, fSetLogs:[], fCurExIdx:0, fExLog:[], fExCooldown:0,
   // ForTime (fChk 제거 - aChk1/aChk2로 통일)
   // EMOM
-  eTimeLeft:0, eRound:1, eRunning:false, eDone:false, eExIdx:0, eRestPhase:false,
+  eTimeLeft:0, eRound:1, eRunning:false, eDone:false, eExIdx:0, eRestPhase:false, eRoundLogs:[],
   // saveRecord
   srSets:0, srReps:0, srTimeMin:0, srTimeSec:0,
   // rank
@@ -1350,7 +1350,7 @@ function startCountdown(){
       clearInterval(cdInt);
       const wod=getActiveWod();
       const tl=wod.timeLimit||(wod.timeLimitMin||10)*60+(wod.timeLimitSec||0);
-      setState({wPhase:'working',aTimeLeft:tl,aSets:0,aRunning:true,aDone:false,aCheckLogs:[],aCooldown:0,aExCooldown:10,aCurExIdx:0,aExLog:[],fElapsed:0,fRunning:true,fDone:false,fSets:0,fSetLogs:[],fCurExIdx:0,fExLog:[],fExCooldown:10,eTimeLeft:60,eRound:1,eRunning:true,eDone:false,eExIdx:0,eRestPhase:false});
+      setState({wPhase:'working',aTimeLeft:tl,aSets:0,aRunning:true,aDone:false,aCheckLogs:[],aCooldown:0,aExCooldown:10,aCurExIdx:0,aExLog:[],fElapsed:0,fRunning:true,fDone:false,fSets:0,fSetLogs:[],fCurExIdx:0,fExLog:[],fExCooldown:10,eTimeLeft:60,eRound:1,eRunning:true,eDone:false,eExIdx:0,eRestPhase:false,eRoundLogs:[]});
       startWorkTimer();
       return;
     }
@@ -1394,7 +1394,8 @@ function startWorkTimer(){
           S.eRestPhase=false;
           S.eTimeLeft=60; // 다음 라운드 운동은 60초 새로 시작
         } else {
-          // 1분 다 됐는데 완료 안 누름 → 자동으로 다음 라운드
+          // 1분 다 됐는데 완료 안 누름 → 60초 소요로 기록 후 다음 라운드
+          S.eRoundLogs=[...S.eRoundLogs,{round:S.eRound,time:60,auto:true}];
           S.eRound++;
           if(S.eRound>totalRounds){
             clearInterval(workInt);
@@ -1542,10 +1543,50 @@ function buildEmom(){
   const wrap=mkDiv('','min-height:100vh;display:flex;flex-direction:column;padding:13px;background:var(--bg)');
 
   if(S.eDone){
-    wrap.innerHTML=`<div class="tf" style="font-size:28px;color:var(--accent);text-align:center;margin-top:45px">🎉 완료!</div>
-      <div style="font-size:18px;font-weight:700;text-align:center;margin:10px 0;color:var(--muted)">${totalRounds}라운드 EMOM 종료!</div>
-      <div style="text-align:center;color:var(--muted);font-size:13px;margin-bottom:24px">${S.eRound-1}라운드 완료했어요 💪</div>`;
-    wrap.appendChild(mkBtn('btn-p','','기록 저장하기 →',()=>{ clearInterval(workInt); setState({screen:'saveRecord',srSets:S.eRound-1,srReps:0,srTimeMin:0,srTimeSec:0,aChk1:false,aChk2:false}); }));
+    const completedRounds=S.eRound-1;
+    const logs=S.eRoundLogs||[];
+    const avgTime=logs.length>0?Math.round(logs.reduce((a,b)=>a+b.time,0)/logs.length):0;
+
+    const doneWrap=mkDiv('','padding:16px');
+    doneWrap.innerHTML=`<div class="tf" style="font-size:28px;color:var(--accent);text-align:center;margin-top:24px;margin-bottom:6px">🎉 완료!</div>
+      <div style="font-size:16px;font-weight:700;text-align:center;margin-bottom:4px;color:var(--muted)">${totalRounds}라운드 EMOM</div>
+      <div style="text-align:center;color:var(--muted);font-size:13px;margin-bottom:16px">${completedRounds}라운드 완료 💪</div>`;
+
+    // 평균 페이스 카드
+    if(logs.length>0){
+      const statRow=mkDiv('','display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px');
+      statRow.innerHTML=`
+        <div class="card" style="text-align:center">
+          <div style="font-size:26px;font-weight:900;color:var(--green)">${avgTime}초</div>
+          <div style="font-size:11px;color:var(--muted)">평균 소요시간</div>
+        </div>
+        <div class="card" style="text-align:center">
+          <div style="font-size:26px;font-weight:900;color:var(--accent)">${60-avgTime}초</div>
+          <div style="font-size:11px;color:var(--muted)">평균 휴식시간</div>
+        </div>`;
+      doneWrap.appendChild(statRow);
+
+      // 라운드별 기록
+      const logsCard=mkDiv('card','margin-bottom:14px');
+      logsCard.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:10px">라운드별 소요시간</div>`;
+      const grid=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:5px');
+      logs.forEach(l=>{
+        const isfast=l.time<avgTime;
+        grid.innerHTML+=`<div style="text-align:center;background:${isfast?'#10b98115':'#f43f5e10'};border-radius:10px;padding:6px 3px;border:1px solid ${isfast?'#10b98130':'#f43f5e20'}">
+          <div style="font-size:9px;color:var(--muted)">R${l.round}</div>
+          <div style="font-weight:700;font-size:13px;color:${isfast?'var(--green)':'var(--red)'}">${l.time}초${l.auto?'*':''}</div>
+        </div>`;
+      });
+      logsCard.appendChild(grid);
+      if(logs.some(l=>l.auto)) logsCard.innerHTML+=`<div style="font-size:9px;color:var(--muted);margin-top:6px">* 시간 초과로 자동 넘어간 라운드</div>`;
+      doneWrap.appendChild(logsCard);
+    }
+
+    doneWrap.appendChild(mkBtn('btn-p','','기록 저장하기 →',()=>{
+      clearInterval(workInt);
+      setState({screen:'saveRecord',srSets:completedRounds,srReps:0,srTimeMin:0,srTimeSec:0,aChk1:false,aChk2:false});
+    }));
+    wrap.appendChild(doneWrap);
     return wrap;
   }
 
@@ -1594,10 +1635,11 @@ function buildEmom(){
 
     // 완료 버튼
     const doneBtn=mkBtn('btn-g','width:100%;padding:18px;font-size:18px;font-weight:900;margin-bottom:8px','✅ 완료! 남은 시간 휴식',()=>{
+      const roundTime=60-S.eTimeLeft; // 이번 라운드 소요 시간
+      S.eRoundLogs=[...S.eRoundLogs,{round:S.eRound,time:roundTime}];
       S.eRestPhase=true;
       S.eRound++;
       if(S.eRound>totalRounds){ clearInterval(workInt); S.eDone=true; render(); return; }
-      // eTimeLeft는 그대로 유지 → 남은 시간만큼만 휴식
       render();
     });
     wrap.appendChild(doneBtn);
@@ -1821,7 +1863,7 @@ function doSaveRecord(){
     ...(wod.type==='AMRAP'
       ?{sets:S.srSets,reps:S.srReps,checkLogs:[...S.aCheckLogs],completedExercisesLog:[...S.aExLog]}
       :wod.type==='EMOM'
-      ?{time:(S.eRound-1)*60+(60-S.eTimeLeft),sets:S.srSets,completedExercisesLog:[]}
+      ?{time:(S.eRound-1)*60+(60-S.eTimeLeft),sets:S.srSets,emomRoundLogs:[...(S.eRoundLogs||[])],completedExercisesLog:[]}
       :{time:S.srTimeMin*60+S.srTimeSec,targetSets:wod.targetSets,completedSets:S.fSets,forTimeSetLogs:[...S.fSetLogs],completedExercisesLog:[...S.fExLog]}
     ),
   };
