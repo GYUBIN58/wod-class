@@ -90,7 +90,8 @@ window.fbDeleteTeacher = async function(id) {
 // 교사 계정 저장
 window.fbSaveTeacher = async function(teacher) {
   try {
-    await setDoc(doc(db, 'teachers', teacher.id), teacher);
+    const teacherWithSchool={...teacher,schoolId:(window._S?.selectedSchoolId||'wolchon')};
+    await setDoc(doc(db, 'teachers', teacher.id), teacherWithSchool);
   } catch(e) {
     console.warn('Firestore 교사 저장 실패:', e);
   }
@@ -101,12 +102,12 @@ window.fbLoadWodList = async function(tid) {
   try {
     const sid=(window._S?.selectedSchoolId||'wolchon');
     const sKey=k=>sid+'_'+k;
-    const snap = await getDoc(doc(db, 'wod_lists', tid));
+    const snap = await getDoc(doc(db, 'wod_lists', sid+'_'+tid));
     if(snap.exists()) {
       const fbList = snap.data().list||[];
       if(fbList.length > 0) stor.set(sKey('wod_list_'+tid), fbList);
     }
-    const snap2 = await getDoc(doc(db, 'wod_active_ids', tid));
+    const snap2 = await getDoc(doc(db, 'wod_active_ids', sid+'_'+tid));
     if(snap2.exists()) {
       const fbIds = snap2.data().ids||[];
       if(fbIds.length > 0) stor.set(sKey('wod_active_'+tid), fbIds);
@@ -119,7 +120,8 @@ window.fbLoadWodList = async function(tid) {
 // WOD 목록 저장
 window.fbSaveWodList = async function(tid, list) {
   try {
-    await setDoc(doc(db, 'wod_lists', tid), { list });
+    const sid=(window._S?.selectedSchoolId||'wolchon');
+    await setDoc(doc(db, 'wod_lists', sid+'_'+tid), { list, schoolId:sid });
   } catch(e) {
     console.warn('Firestore WOD 목록 저장 실패:', e);
     throw e;
@@ -129,7 +131,8 @@ window.fbSaveWodList = async function(tid, list) {
 // WOD 공개 목록 저장
 window.fbSaveActiveWodIds = async function(tid, ids) {
   try {
-    await setDoc(doc(db, 'wod_active_ids', tid), { ids });
+    const sid=(window._S?.selectedSchoolId||'wolchon');
+    await setDoc(doc(db, 'wod_active_ids', sid+'_'+tid), { ids, schoolId:sid });
   } catch(e) {
     console.warn('Firestore WOD 공개 저장 실패:', e);
   }
@@ -147,15 +150,21 @@ window.fbSaveClasses = async function(tid, classes) {
 // 앱 시작 시 Firestore에서 전체 데이터 불러오기
 window.fbLoadAll = async function() {
   try {
-    // 기록 불러오기
+    // 기록 불러오기 (현재 학교 것만)
     const recSnap = await getDocs(collection(db, 'records'));
     const fbRecs = [];
-    recSnap.forEach(d => fbRecs.push(d.data()));
+    recSnap.forEach(d => {
+      const data=d.data();
+      if(!data.schoolId||data.schoolId===schoolId) fbRecs.push(data);
+    });
 
-    // 교사 계정 불러오기
+    // 교사 계정 불러오기 (현재 학교 것만)
     const teacherSnap = await getDocs(collection(db, 'teachers'));
     const fbTeachers = [];
-    teacherSnap.forEach(d => fbTeachers.push(d.data()));
+    teacherSnap.forEach(d => {
+      const data=d.data();
+      if(!data.schoolId||data.schoolId===schoolId) fbTeachers.push(data);
+    });
 
     // WOD 불러오기
     const wodSnap = await getDocs(collection(db, 'wods'));
@@ -167,15 +176,30 @@ window.fbLoadAll = async function() {
     const classMap = {};
     classSnap.forEach(d => { classMap[d.id] = d.data().classes; });
 
-    // WOD 목록 불러오기
+    // WOD 목록 불러오기 (학교별)
     const wodListSnap = await getDocs(collection(db, 'wod_lists'));
     const wodListMap = {};
-    wodListSnap.forEach(d => { wodListMap[d.id] = d.data().list || []; });
+    wodListSnap.forEach(d => {
+      const data=d.data();
+      if(!data.schoolId||data.schoolId===schoolId){
+        // doc id가 schoolId_tid 형식이면 tid만 추출
+        const docId=d.id;
+        const tid=docId.startsWith(schoolId+'_')?docId.slice(schoolId.length+1):docId;
+        wodListMap[tid] = data.list || [];
+      }
+    });
 
-    // WOD 공개 목록 불러오기
+    // WOD 공개 목록 불러오기 (학교별)
     const wodActiveSnap = await getDocs(collection(db, 'wod_active_ids'));
     const wodActiveMap = {};
-    wodActiveSnap.forEach(d => { wodActiveMap[d.id] = d.data().ids || []; });
+    wodActiveSnap.forEach(d => {
+      const data=d.data();
+      if(!data.schoolId||data.schoolId===schoolId){
+        const docId=d.id;
+        const tid=docId.startsWith(schoolId+'_')?docId.slice(schoolId.length+1):docId;
+        wodActiveMap[tid] = data.ids || [];
+      }
+    });
 
     // 로컬과 병합 (Firestore 우선, 로컬에만 있는 것도 유지)
     const stor = window._stor;
@@ -1901,7 +1925,7 @@ function doSaveRecord(){
     ...(wod.type==='AMRAP'
       ?{sets:S.srSets,reps:S.srReps,checkLogs:[...S.aCheckLogs],completedExercisesLog:[...S.aExLog]}
       :wod.type==='EMOM'
-      ?{time:(S.eRound-1)*60+(60-S.eTimeLeft),sets:S.srSets,emomRoundLogs:[...(S.eRoundLogs||[])],completedExercisesLog:[]}
+      ?{time:Math.max(1,(S.eRound-1)*60+(60-S.eTimeLeft)),sets:S.srSets,emomRoundLogs:[...(S.eRoundLogs||[])],completedExercisesLog:[]}
       :{time:S.srTimeMin*60+S.srTimeSec,targetSets:wod.targetSets,completedSets:S.fSets,forTimeSetLogs:[...S.fSetLogs],completedExercisesLog:[...S.fExLog]}
     ),
   };
@@ -3105,7 +3129,9 @@ function buildAdminWodForm(){
   saveBtnRow.appendChild(mkBtn('btn-s','flex:0.4;font-size:12px','취소',()=>{
     S.adminWod=null;
     S.adminWodEditId=null;
-    render();
+    // 슈퍼관리자에서 편집 진입했으면 superAdmin으로 복귀
+    if(S.superAdminMode&&S.screen==='admin')setState({screen:'superAdmin'});
+    else render();
   }));
   wrap.appendChild(saveBtnRow);
   return wrap;
