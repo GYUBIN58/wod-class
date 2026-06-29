@@ -438,7 +438,7 @@ let S = {
   toast:null,
   // 로그인
   lStep:1,
-  lTeacherId:'', lCls:'', lTeam:'', lName:'', lMembers:[], lMemberInput:'', lErr:'', lWodId:'', lGrade:'2', wodListLoaded:false, wodListReady:false,
+  lTeacherId:'', lCls:'', lTeam:'', lName:'', lMembers:[], lMemberInput:'', lErr:'', lWodId:'', lGrade:'1', wodListLoaded:false, wodListReady:false,
   lAdminMode:false, lAdminId:'', lAdminPw:'',
   // 회원가입
   lShowMasterInput:false, lMasterCode:'', lMasterErr:'',
@@ -945,11 +945,12 @@ function buildLogin(){
       // 학년 탭
       const gradeTab=mkDiv('','display:flex;gap:6px;margin-bottom:8px');
       ['1학년','2학년','3학년'].forEach((g,gi)=>{
-        const isOn=(S.lGrade||'2')===(gi===0?'2':'3');
-        gradeTab.appendChild(mkBtn(`chip ${isOn?'on':''}`,`flex:1;font-size:13px;padding:9px`,g,()=>setState({lGrade:gi===0?'1':gi===1?'2':'3',lCls:'',lErr:''})));
+        const gradeVal=gi===0?'1':gi===1?'2':'3';
+        const isOn=(S.lGrade||'1')===gradeVal;
+        gradeTab.appendChild(mkBtn(`chip ${isOn?'on':''}`,`flex:1;font-size:13px;padding:9px`,g,()=>setState({lGrade:gradeVal,lCls:'',lErr:''})));
       });
       wrap.appendChild(gradeTab);
-      const gradeClasses=myClasses.filter(c=>c.startsWith((S.lGrade||'2')+'-'));
+      const gradeClasses=myClasses.filter(c=>c.startsWith((S.lGrade||'1')+'-'));
       const cg=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:12px');
       gradeClasses.forEach(c=>{
         cg.appendChild(mkBtn(`chip ${S.lCls===c?'on':''}`,`font-size:11px;padding:7px 2px`,c,()=>setState({lCls:c,lErr:''})));
@@ -2930,13 +2931,14 @@ function buildAdminClasses(){
   // 학년 탭
   const gradeTabRow=mkDiv('','display:flex;gap:6px;margin-bottom:9px');
   ['1학년','2학년','3학년'].forEach((g,gi)=>{
-    const grade=gi===0?'2':'3';
-    const isOn=(S.adminClassGrade||'2')===grade;
+    const grade=gi===0?'1':gi===1?'2':'3';
+    const isOn=(S.adminClassGrade||'1')===grade;
     gradeTabRow.appendChild(mkBtn(`chip ${isOn?'on':''}`,`flex:1;font-size:12px;padding:8px`,g,()=>{S.adminClassGrade=grade;render();}));
   });
   info.appendChild(gradeTabRow);
 
-  const showClasses=(S.adminClassGrade||'2')==='2'?CLASSES_2:CLASSES_3;
+  const curGrade=S.adminClassGrade||'1';
+  const showClasses=curGrade==='1'?CLASSES_1:curGrade==='2'?CLASSES_2:CLASSES_3;
   const grid=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:11px');
   showClasses.forEach(c=>{
     const on=(S.adminClassList||[]).includes(c);
@@ -2952,14 +2954,14 @@ function buildAdminClasses(){
   // 전체 선택 / 해제
   const row=mkDiv('','display:flex;gap:6px;margin-bottom:11px');
   row.appendChild(mkBtn('btn-s','flex:1;font-size:12px;padding:9px','이 학년 전체 선택',()=>{
-    const grade=S.adminClassGrade||'2';
-    const gradeList=grade==='2'?CLASSES_2:CLASSES_3;
+    const grade=S.adminClassGrade||'1';
+    const gradeList=grade==='1'?CLASSES_1:grade==='2'?CLASSES_2:CLASSES_3;
     const current=S.adminClassList||[];
     S.adminClassList=[...new Set([...current,...gradeList])];
     render();
   }));
   row.appendChild(mkBtn('btn-s','flex:1;font-size:12px;padding:9px','이 학년 전체 해제',()=>{
-    const grade=S.adminClassGrade||'2';
+    const grade=S.adminClassGrade||'1';
     S.adminClassList=(S.adminClassList||[]).filter(c=>!c.startsWith(grade+'-'));
     render();
   }));
