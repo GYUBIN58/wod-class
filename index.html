@@ -141,7 +141,8 @@ window.fbSaveActiveWodIds = async function(tid, ids) {
 // 담당 반 저장
 window.fbSaveClasses = async function(tid, classes) {
   try {
-    await setDoc(doc(db, 'teacher_classes', tid), { classes });
+    const sid=(window._S?.selectedSchoolId||'wolchon');
+    await setDoc(doc(db, 'teacher_classes', tid), { classes, schoolId:sid });
   } catch(e) {
     console.warn('Firestore 담당 반 저장 실패:', e);
   }
@@ -166,15 +167,15 @@ window.fbLoadAll = async function() {
       if(!data.schoolId||data.schoolId===schoolId) fbTeachers.push(data);
     });
 
-    // WOD 불러오기
+    // WOD 불러오기 (학교별)
     const wodSnap = await getDocs(collection(db, 'wods'));
     const wodMap = {};
-    wodSnap.forEach(d => { wodMap[d.id] = d.data(); });
+    wodSnap.forEach(d => { const data=d.data(); if(!data.schoolId||data.schoolId===schoolId) wodMap[d.id]=data; });
 
-    // 담당 반 불러오기
+    // 담당 반 불러오기 (학교별)
     const classSnap = await getDocs(collection(db, 'teacher_classes'));
     const classMap = {};
-    classSnap.forEach(d => { classMap[d.id] = d.data().classes; });
+    classSnap.forEach(d => { const data=d.data(); if(!data.schoolId||data.schoolId===schoolId) classMap[d.id]=data.classes; });
 
     // WOD 목록 불러오기 (학교별)
     const wodListSnap = await getDocs(collection(db, 'wod_lists'));
@@ -1108,7 +1109,12 @@ function buildLogin(){
       // 학년 탭 - 담당 반이 있는 학년만 표시
       const availableGrades=['1','2','3'].filter(g=>myClasses.some(c=>c.startsWith(g+'-')));
       // 기본 학년: 담당 반 있는 첫 번째 학년
-      if(availableGrades.length>0 && !availableGrades.includes(S.lGrade||'1')){
+      if(availableGrades.length===0){
+        wrap.appendChild(mkDiv('card','text-align:center;color:var(--muted);padding:20px','담당 반이 설정되지 않았습니다.<br>선생님께 문의해주세요 😊'));
+        wrap.appendChild(mkBtn('btn-s','margin-top:10px','← 뒤로',()=>setState({lStep:2,lErr:'',wodListLoaded:false,wodListReady:false})));
+        return wrap;
+      }
+      if(!availableGrades.includes(S.lGrade||'1')){
         S.lGrade=availableGrades[0];
       }
       const gradeTab=mkDiv('','display:flex;gap:6px;margin-bottom:8px');
@@ -1333,7 +1339,7 @@ function buildHome(){
   </div>
   <div style="background:var(--card2);border-radius:9px;padding:9px;margin-bottom:9px">
     ${wod.type==='AMRAP'?`<div style="color:var(--accent);font-weight:700;font-size:11px;margin-bottom:5px">⏱ ${fmtTime(tl)} AMRAP — 최대한 많이 반복!</div>`:wod.type==='EMOM'?`<div style="color:var(--green);font-weight:700;font-size:11px;margin-bottom:5px">🕐 ${wod.emomRounds||3}라운드 EMOM — 완료 후 남은 시간은 휴식!</div>`:`<div style="color:var(--blue);font-weight:700;font-size:11px;margin-bottom:5px">🎯 ${wod.targetSets}세트 For Time — 최대한 빠르게!</div>`}
-    ${wod.exercises.map((ex,i)=>`<div style="padding:3px 0;${i<wod.exercises.length-1?'border-bottom:1px solid var(--border)':''}display:flex;gap:5px;font-size:12px"><span style="color:var(--accent);font-weight:700;min-width:16px">${i+1}.</span>${ex}</div>`).join('')}
+    ${(wod.exercises||[]).map((ex,i)=>`<div style="padding:3px 0;${i<(wod.exercises||[]).length-1?'border-bottom:1px solid var(--border)':''}display:flex;gap:5px;font-size:12px"><span style="color:var(--accent);font-weight:700;min-width:16px">${i+1}.</span>${ex}</div>`).join('')}
   </div>`;
   if(myRec){
     wc.innerHTML+=`<div style="background:#22c55e15;border:1px solid #22c55e40;border-radius:9px;padding:9px;text-align:center">
@@ -1387,7 +1393,7 @@ function buildWorkoutReady(){
       ${wod.type==='AMRAP'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${fmtTime(tl)}</span>`:wod.type==='EMOM'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.emomRounds||3}라운드</span>`:`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.targetSets}세트</span>`}
     </div>
     <div style="background:var(--card2);border-radius:9px;padding:9px 11px;font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">${typeDesc}</div>
-    ${wod.exercises.map((ex,i)=>`<div style="padding:6px 0;${i<wod.exercises.length-1?'border-bottom:1px solid var(--border)':''}display:flex;gap:6px;font-size:13px"><span style="color:var(--accent);font-weight:700">${i+1}.</span>${ex}</div>`).join('')}`;
+    ${(wod.exercises||[]).map((ex,i)=>`<div style="padding:6px 0;${i<(wod.exercises||[]).length-1?'border-bottom:1px solid var(--border)':''}display:flex;gap:6px;font-size:13px"><span style="color:var(--accent);font-weight:700">${i+1}.</span>${ex}</div>`).join('')}`;
   if(!isInd)c.innerHTML+=`<div style="margin-top:8px;background:var(--card2);border-radius:7px;padding:6px 8px;font-size:11px;color:var(--muted)">👥 참여 팀원: ${S.user?.members?.join(', ')}</div>`;
   wrap.appendChild(c);
   // 시뮬레이션 버튼
@@ -1719,7 +1725,7 @@ function buildEmom(){
   }));
   ctrl.appendChild(mkBtn('btn-s','',ic.refresh+' 리셋',()=>{
     clearInterval(workInt);
-    setState({eTimeLeft:60,eRound:1,eRunning:false,eDone:false,eExIdx:0,eRestPhase:false});
+    setState({eTimeLeft:60,eRound:1,eRunning:false,eDone:false,eExIdx:0,eRestPhase:false,eRoundLogs:[]});
   }));
   wrap.appendChild(ctrl);
 
