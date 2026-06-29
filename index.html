@@ -78,6 +78,15 @@ window.fbDeleteExamRecord = async function(id) {
   }
 };
 
+// 교사 삭제
+window.fbDeleteTeacher = async function(id) {
+  try {
+    await deleteDoc(doc(db, 'teachers', id));
+  } catch(e) {
+    console.warn('Firestore 교사 삭제 실패:', e);
+  }
+};
+
 // 교사 계정 저장
 window.fbSaveTeacher = async function(teacher) {
   try {
@@ -514,6 +523,7 @@ function getActiveWod(){
 function fbSaveRecord(rec){ window.fbSaveRecord && window.fbSaveRecord(rec); }
 function fbDeleteRecord(id){ window.fbDeleteRecord && window.fbDeleteRecord(id); }
 function fbSaveTeacher(t){ window.fbSaveTeacher && window.fbSaveTeacher(t); }
+function fbDeleteTeacher(id){ window.fbDeleteTeacher && window.fbDeleteTeacher(id); }
 function fbSaveClasses(tid,cls){ window.fbSaveClasses && window.fbSaveClasses(tid,cls); }
 function fbSaveWodList(tid,list){ return window.fbSaveWodList ? window.fbSaveWodList(tid,list) : Promise.resolve(); }
 function fbSaveActiveWodIds(tid,ids){ window.fbSaveActiveWodIds && window.fbSaveActiveWodIds(tid,ids); }
@@ -813,10 +823,12 @@ function buildSuperAdmin(){
         delTBtn.onclick=()=>{
           const newList=teachers.filter(x=>x.id!==t.id);
           stor.set('teacher_accounts_'+curSid,newList);
-          // Firebase에서도 교사 삭제
+          // Firebase에서도 교사 기록 삭제
           if(window.fbDeleteRecord){
             allRecs.filter(r=>r.teacherId===t.id).forEach(r=>fbDeleteRecord(r.id));
           }
+          // Firebase teachers 컬렉션에서도 삭제
+          if(window.fbDeleteTeacher) window.fbDeleteTeacher(t.id);
           // 해당 교사 기록도 삭제
           const newRecs=allRecs.filter(r=>r.teacherId!==t.id);
           stor.set(curSid+'_wod_records',newRecs);
