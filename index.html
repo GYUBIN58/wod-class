@@ -471,7 +471,7 @@ let S = {
   adminWodSimId:null,
   simData:null, simSlide:0, simPlaying:false,
   adminClearTarget:'all', adminConfirm:false,
-  adminFilterCls:'all', adminFilterMode:'all',
+  adminFilterCls:'all', adminFilterMode:'all', adminFilterGrade:'all',
   adminExpandRecord:null,
   adminClassList:null, adminClassSaving:false, adminClassGrade:'1',
 };
@@ -500,7 +500,6 @@ function getActiveWod(){
 function fbSaveRecord(rec){ window.fbSaveRecord && window.fbSaveRecord(rec); }
 function fbDeleteRecord(id){ window.fbDeleteRecord && window.fbDeleteRecord(id); }
 function fbSaveTeacher(t){ window.fbSaveTeacher && window.fbSaveTeacher(t); }
-function fbSaveWod(tid,wod){ window.fbSaveWod && window.fbSaveWod(tid,wod); }
 function fbSaveClasses(tid,cls){ window.fbSaveClasses && window.fbSaveClasses(tid,cls); }
 function fbSaveWodList(tid,list){ return window.fbSaveWodList ? window.fbSaveWodList(tid,list) : Promise.resolve(); }
 function fbSaveActiveWodIds(tid,ids){ window.fbSaveActiveWodIds && window.fbSaveActiveWodIds(tid,ids); }
@@ -730,10 +729,10 @@ function buildSuperAdmin(){
   wrap.appendChild(statsRow);
 
   // 현재 선택된 학교 탭
-  if(!S.superSchoolTab) S.superSchoolTab=schools[0]?.id||'wolchon';
+  if(!S.superSchoolTab){ S.superSchoolTab=schools[0]?.id||'wolchon'; }
   const schoolTabs=mkDiv('','display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:4px');
   schools.forEach(s=>{
-    schoolTabs.appendChild(mkBtn(`chip ${S.superSchoolTab===s.id?'on':''}`,`flex-shrink:0;font-size:12px;padding:8px 12px`,s.name,()=>{S.superSchoolTab=s.id;render();}));
+    schoolTabs.appendChild(mkBtn(`chip ${S.superSchoolTab===s.id?'on':''}`,`flex-shrink:0;font-size:12px;padding:8px 12px`,s.name,()=>setState({superSchoolTab:s.id,superOpenTeacher:null})));
   });
   wrap.appendChild(schoolTabs);
 
@@ -1794,7 +1793,7 @@ function buildSaveRecord(){
   wrap.appendChild(chkCard);
 
   const saveBtn=mkBtn('btn-p','margin-top:auto',`💾 ${isInd?'기록 저장':'우리 팀 기록 저장'}`,doSaveRecord);
-  if(!S.aChk1||!S.aChk2)saveBtn.disabled=true;
+  if(wod.type==='AMRAP'&&(!S.aChk1||!S.aChk2))saveBtn.disabled=true;
   wrap.appendChild(saveBtn);
   return wrap;
 }
@@ -3098,11 +3097,22 @@ function buildAdminRecords(){
   const fc=mkDiv('card','');
   fc.innerHTML='<div style="font-weight:700;font-size:13px;margin-bottom:8px">🔍 필터</div>';
   fc.innerHTML+=`<div style="color:var(--muted);font-size:10px;margin-bottom:4px">반</div>`;
-  const cg=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:7px');
-  [['all','전체'],...ALL_CLASSES.map(c=>[c,c])].forEach(([v,l])=>{
-    cg.appendChild(mkBtn(`chip ${S.adminFilterCls===v?'on':''}`,`font-size:9px;padding:5px 1px`,l,()=>setState({adminFilterCls:v})));
+  // 학년 탭
+  const gradeTabs=mkDiv('','display:flex;gap:4px;margin-bottom:5px');
+  [['all','전체'],['1','1학년'],['2','2학년'],['3','3학년']].forEach(([v,l])=>{
+    gradeTabs.appendChild(mkBtn(`chip ${(S.adminFilterGrade||'all')===v?'on':''}`,`flex:1;font-size:11px;padding:7px`,l,()=>setState({adminFilterGrade:v,adminFilterCls:'all'})));
   });
-  fc.appendChild(cg);
+  fc.appendChild(gradeTabs);
+  // 선택된 학년의 반 목록
+  const filterGrade=S.adminFilterGrade||'all';
+  const showFilterClasses=filterGrade==='all'?[]:filterGrade==='1'?CLASSES_1:filterGrade==='2'?CLASSES_2:CLASSES_3;
+  if(showFilterClasses.length>0){
+    const cg=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:7px');
+    [['all','전체'],...showFilterClasses.map(c=>[c,c])].forEach(([v,l])=>{
+      cg.appendChild(mkBtn(`chip ${S.adminFilterCls===v?'on':''}`,`font-size:9px;padding:5px 1px`,l,()=>setState({adminFilterCls:v})));
+    });
+    fc.appendChild(cg);
+  }
   const mr=mkDiv('','display:flex;gap:4px;margin-bottom:7px');
   [['all','전체'],['individual','개인전'],['team','팀전']].forEach(([v,l])=>{
     mr.appendChild(mkBtn(`chip ${S.adminFilterMode===v?'on':''}`,`flex:1;font-size:11px`,l,()=>setState({adminFilterMode:v})));
@@ -3142,6 +3152,7 @@ function buildAdminRecords(){
 
   // 기록 목록
   let filtered=S.records.filter(r=>r.teacherId===S.user?.teacherId);
+  if(S.adminFilterGrade&&S.adminFilterGrade!=='all') filtered=filtered.filter(r=>r.class&&r.class.startsWith(S.adminFilterGrade+'-'));
   if(S.adminFilterCls!=='all')filtered=filtered.filter(r=>r.class===S.adminFilterCls);
   if(S.adminFilterMode!=='all')filtered=filtered.filter(r=>r.mode===S.adminFilterMode||(S.adminFilterMode==='individual'&&!r.mode));
 
