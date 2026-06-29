@@ -2119,7 +2119,7 @@ function buildExam(){
       sc.appendChild(mkDiv('','font-size:13px;font-weight:700;color:var(--muted);margin-bottom:8px;width:100%;max-width:400px','반 선택'));
 
       const cls2=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px;width:100%;max-width:400px');
-      ['2-1','2-2','2-3','2-4','2-5','2-6','2-7','2-8','2-9','2-10','2-11','2-12','2-13','2-14','2-15','2-16'].forEach(c=>{
+      ALL_CLASSES.forEach(c=>{
         const btn=mkBtn(`chip ${S.examCls===c?'on':''}`,`font-size:12px;padding:8px`,c,null);
         btn.addEventListener('click',()=>{
           S.examCls=c;
@@ -2259,7 +2259,7 @@ function buildExamRank(){
   const classes=[...new Set(recs.map(r=>r.cls))].sort();
   const filterRow=mkDiv('','display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px');
   ['전체',...classes].forEach(c=>{
-    filterRow.appendChild(mkBtn(`chip ${(S.examRankCls||'전체')===c?'on':''}`,`font-size:11px;padding:6px 10px`,c,()=>{S.examRankCls=c;render();}));
+    filterRow.appendChild(mkBtn(`chip ${(S.examRankCls||'전체')===c?'on':''}`,`font-size:11px;padding:6px 10px`,c,()=>setState({examRankCls:c})));
   });
   sc.appendChild(filterRow);
 
@@ -2333,9 +2333,17 @@ function buildExamRank(){
   }
 
   // 기록 초기화
-  sc.appendChild(mkBtn('btn-d','margin-top:14px','🗑 기록 초기화',()=>{
-    if(confirm('모든 체력측정 기록을 삭제할까요?')){ setExamRecords([]); render(); }
-  }));
+  const clearBtn=mkBtn('btn-d','margin-top:14px','🗑 기록 초기화',()=>{
+    clearBtn.textContent='정말 삭제?';
+    clearBtn.onclick=()=>{
+      setExamRecords([]);
+      if(window.fbDeleteExamRecord){
+        // Firebase에서도 삭제는 개별 id가 필요하므로 생략 (로컬만 초기화)
+      }
+      showToast('기록 초기화됨');render();
+    };
+  });
+  sc.appendChild(clearBtn);
 
   wrap.appendChild(sc);return wrap;
 }
