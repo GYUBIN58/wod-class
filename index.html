@@ -102,15 +102,38 @@ window.fbLoadWodList = async function(tid) {
   try {
     const sid=(window._S?.selectedSchoolId||'wolchon');
     const sKey=k=>sid+'_'+k;
-    const snap = await getDoc(doc(db, 'wod_lists', sid+'_'+tid));
+
+    // 새 키 형식으로 먼저 시도
+    let snap = await getDoc(doc(db, 'wod_lists', sid+'_'+tid));
+    if(!snap.exists()){
+      // 구버전 키 형식으로 fallback
+      snap = await getDoc(doc(db, 'wod_lists', tid));
+    }
     if(snap.exists()) {
       const fbList = snap.data().list||[];
-      if(fbList.length > 0) stor.set(sKey('wod_list_'+tid), fbList);
+      if(fbList.length > 0){
+        stor.set(sKey('wod_list_'+tid), fbList);
+        // 새 키로 마이그레이션
+        if(!snap.ref.id.startsWith(sid+'_')){
+          await setDoc(doc(db, 'wod_lists', sid+'_'+tid), {list:fbList,schoolId:sid});
+        }
+      }
     }
-    const snap2 = await getDoc(doc(db, 'wod_active_ids', sid+'_'+tid));
+
+    // 공개 목록도 동일하게 fallback
+    let snap2 = await getDoc(doc(db, 'wod_active_ids', sid+'_'+tid));
+    if(!snap2.exists()){
+      snap2 = await getDoc(doc(db, 'wod_active_ids', tid));
+    }
     if(snap2.exists()) {
       const fbIds = snap2.data().ids||[];
-      if(fbIds.length > 0) stor.set(sKey('wod_active_'+tid), fbIds);
+      if(fbIds.length > 0){
+        stor.set(sKey('wod_active_'+tid), fbIds);
+        // 새 키로 마이그레이션
+        if(!snap2.ref.id.startsWith(sid+'_')){
+          await setDoc(doc(db, 'wod_active_ids', sid+'_'+tid), {ids:fbIds,schoolId:sid});
+        }
+      }
     }
   } catch(e) {
     console.warn('WOD 목록 로드 실패 (로컬 데이터 사용):', e);
@@ -199,6 +222,21 @@ window.fbLoadAll = async function() {
         const docId=d.id;
         const tid=docId.startsWith(schoolId+'_')?docId.slice(schoolId.length+1):docId;
         wodActiveMap[tid] = data.ids || [];
+      }
+    });
+
+    // 기존 localStorage 키 마이그레이션 (구버전 → 새버전)
+    const teachers4migration = stor.get('teacher_accounts_'+schoolId, []);
+    teachers4migration.forEach(t=>{
+      const oldList = stor.get('wod_list_'+t.id, []);
+      const newList = stor.get(sKey('wod_list_'+t.id), []);
+      if(oldList.length>0 && newList.length===0){
+        stor.set(sKey('wod_list_'+t.id), oldList);
+      }
+      const oldIds = stor.get('wod_active_'+t.id, []);
+      const newIds = stor.get(sKey('wod_active_'+t.id), []);
+      if(oldIds.length>0 && newIds.length===0){
+        stor.set(sKey('wod_active_'+t.id), oldIds);
       }
     });
 
