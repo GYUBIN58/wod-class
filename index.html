@@ -568,7 +568,7 @@ function showToast(msg,type='success'){
     _toastTimer=setTimeout(()=>{t.remove();_toastTimer=null;},2500);
     return;
   }
-  save(); render();
+  render();
   _toastTimer=setTimeout(()=>{ Object.assign(S,{toast:null}); render(); _toastTimer=null; },2500);
 }
 function getActiveWod(){
@@ -2118,8 +2118,17 @@ function buildExam(){
       sc.appendChild(mkDiv('','font-size:15px;color:var(--muted);margin-bottom:20px;text-align:center','이름과 반을 입력하고 시작하세요!'));
       sc.appendChild(mkDiv('','font-size:13px;font-weight:700;color:var(--muted);margin-bottom:8px;width:100%;max-width:400px','반 선택'));
 
+      // 학년 탭
+      const examGradeTab=mkDiv('','display:flex;gap:6px;margin-bottom:8px;width:100%;max-width:400px');
+      ['1','2','3'].forEach(g=>{
+        const isOn=(S.examGrade||'2')===g;
+        examGradeTab.appendChild(mkBtn(`chip ${isOn?'on':''}`,`flex:1;font-size:12px;padding:8px`,g+'학년',()=>{S.examGrade=g;S.examCls='';const root2=document.getElementById('root');root2.innerHTML='';root2.appendChild(buildExam());}));
+      });
+      sc.appendChild(examGradeTab);
+
+      const examClasses=(S.examGrade||'2')==='1'?CLASSES_1:(S.examGrade||'2')==='3'?CLASSES_3:CLASSES_2;
       const cls2=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px;width:100%;max-width:400px');
-      ALL_CLASSES.forEach(c=>{
+      examClasses.forEach(c=>{
         const btn=mkBtn(`chip ${S.examCls===c?'on':''}`,`font-size:12px;padding:8px`,c,null);
         btn.addEventListener('click',()=>{
           S.examCls=c;
@@ -2385,7 +2394,7 @@ function buildWodSim(){
     `<div style="font-weight:700;font-size:15px;margin-bottom:5px">${wod.title}</div>
      <div style="display:flex;gap:5px;flex-wrap:wrap">
        <span class="badge ${wod.type==='AMRAP'?'bo':wod.type==='EMOM'?'bg':'bb'}">${wod.type}</span>
-       ${wod.type==='AMRAP'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${fmtTime(tl)}</span>`:wod.type==='EMOM'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.emomRounds||exercises.length}분</span>`:`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.targetSets}세트</span>`}
+       ${wod.type==='AMRAP'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${fmtTime(tl)}</span>`:wod.type==='EMOM'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.emomRounds||3}라운드</span>`:`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.targetSets}세트</span>`}
        <span class="badge bg">${exercises.length}가지 운동</span>
      </div>`));
 
@@ -2413,7 +2422,7 @@ function buildWodSim(){
         desc:wod.type==='AMRAP'
           ?`⏱ ${fmtTime(tl)} 동안 아래 운동들을 최대한 많이 반복하는 운동입니다!`
           :wod.type==='EMOM'
-          ?`🕐 매 분마다 새 운동! ${wod.emomRounds||exercises.length}분 동안 총 ${exercises.length}가지 운동을 순서대로 합니다!`
+          ?`🕐 아래 운동들을 1분 안에 모두 완료! 완료 버튼 누르면 남은 시간 휴식. ${wod.emomRounds||3}라운드 반복합니다!`
           :`🎯 아래 운동들을 순서대로 ${wod.targetSets}세트 완료하는 운동입니다!`});
       exercises.forEach((ex,i)=>{
         const desc=(wod.exerciseDescs||[])[i]||'선생님이 설명을 입력하지 않았습니다.';
@@ -2421,7 +2430,7 @@ function buildWodSim(){
       });
       slides.push({type:'transition',title:'운동 순서',
         desc:exercises.map((ex,i)=>`${i+1}. ${ex}`).join('\n')
-          +`\n\n${wod.type==='AMRAP'?`⏱ 위 순서를 ${fmtTime(tl)} 동안 반복!`:wod.type==='EMOM'?`🕐 위 순서로 ${wod.emomRounds||exercises.length}분 EMOM!`:`🎯 위 순서로 ${wod.targetSets}세트 완료!`}`});
+          +`\n\n${wod.type==='AMRAP'?`⏱ 위 순서를 ${fmtTime(tl)} 동안 반복!`:wod.type==='EMOM'?`🕐 위 운동들을 1분 안에 완료 → 휴식 → ${wod.emomRounds||3}라운드 반복!`:`🎯 위 순서로 ${wod.targetSets}세트 완료!`}`});
       slides.push({type:'outro',emoji:'🔥',title:'준비됐나요?',desc:'정확한 자세로 최선을 다해보세요! 화이팅! 💪'});
       S.simData={slides};S.simSlide=0;render();
     }));
@@ -2477,11 +2486,12 @@ function buildWodSim(){
         if(isPlaying){
           clearInterval(window._simPlayInt);S.simPlaying=false;render();
         } else {
+          if(!window._simPlayInt){
           S.simPlaying=true;render();
           window._simPlayInt=setInterval(()=>{
             if(S.simSlide<S.simData.slides.length-1){S.simSlide++;render();}
-            else{clearInterval(window._simPlayInt);S.simPlaying=false;render();}
-          },3000);
+            else{clearInterval(window._simPlayInt);window._simPlayInt=null;S.simPlaying=false;render();}
+          },3000); }
         }
       }));
       nav.appendChild(mkBtn('btn-s',`flex:1`,'다음 '+ic.next,()=>{
