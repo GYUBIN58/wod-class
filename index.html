@@ -482,6 +482,18 @@ let _toastTimer=null;
 function showToast(msg,type='success'){
   if(_toastTimer){clearTimeout(_toastTimer);_toastTimer=null;}
   Object.assign(S,{toast:{msg,type}});
+  // exam 화면은 별도 DOM이라 직접 추가
+  if(S.screen==='exam'){
+    const existingToast=document.querySelector('.toast');
+    if(existingToast) existingToast.remove();
+    const t=document.createElement('div');
+    t.className='toast';
+    t.style.background=type==='success'?'var(--green)':'var(--red)';
+    t.textContent=msg;
+    document.getElementById('root').appendChild(t);
+    _toastTimer=setTimeout(()=>{t.remove();_toastTimer=null;},2500);
+    return;
+  }
   save(); render();
   _toastTimer=setTimeout(()=>{ Object.assign(S,{toast:null}); render(); _toastTimer=null; },2500);
 }
@@ -976,8 +988,8 @@ function buildLogin(){
           window.fbLoadWodList(tid).then(()=>{S.wodListReady=true;render();});
         } else {
           S.wodListReady=true;
+          render();
         }
-        render();
         return wrap;
       }
 
@@ -1201,11 +1213,11 @@ function doLogin(){
   if(!S.lCls){setState({lErr:'반을 선택해주세요'});return;}
   if(isInd){
     if(!S.lName.trim()){setState({lErr:'이름을 입력해주세요'});return;}
-    setState({user:{class:S.lCls,name:S.lName.trim(),team:'개인전',members:[S.lName.trim()],mode:'individual',teacherId:S.lTeacherId,selectedWodId:S.lWodId},screen:'main',tab:'home',lErr:''});
+    setState({user:{class:S.lCls,name:S.lName.trim(),team:'개인전',members:[S.lName.trim()],mode:'individual',teacherId:S.lTeacherId,selectedWodId:S.lWodId||'__default__'},screen:'main',tab:'home',lErr:''});
   } else {
     if(!S.lTeam){setState({lErr:'팀을 선택해주세요'});return;}
     if(S.lMembers.length===0){setState({lErr:'팀원을 최소 1명 입력해주세요'});return;}
-    setState({user:{class:S.lCls,team:S.lTeam,members:S.lMembers,mode:'team',teacherId:S.lTeacherId,selectedWodId:S.lWodId},screen:'main',tab:'home',lErr:''});
+    setState({user:{class:S.lCls,team:S.lTeam,members:S.lMembers,mode:'team',teacherId:S.lTeacherId,selectedWodId:S.lWodId||'__default__'},screen:'main',tab:'home',lErr:''});
   }
 }
 
@@ -1833,19 +1845,21 @@ function buildSaveRecord(){
   }
   wrap.appendChild(c);
 
-  const chkCard=mkDiv('card','margin-bottom:11px');
-  chkCard.innerHTML=`<div style="font-weight:700;font-size:12px;margin-bottom:6px">📋 확인 사항</div>`;
-  const checks=isInd
-    ?[['aChk1','본인이 실제 수행한 기록입니다.'],['aChk2','동작을 정확히 수행하려고 노력했습니다.']]
-    :[['aChk1','팀원 또는 기록자가 동작 수행을 확인했습니다.'],['aChk2','허위 기록이 아니며 실제 수행한 기록입니다.']];
-  checks.forEach(([key,label])=>{
-    const row=mkDiv('check-row','');
-    const cb=document.createElement('input');cb.type='checkbox';cb.checked=S[key];
-    cb.onchange=e=>{S[key]=e.target.checked;render();};
-    row.appendChild(cb);row.appendChild(mkDiv('','font-size:12px;line-height:1.4',label));
-    chkCard.appendChild(row);
-  });
-  wrap.appendChild(chkCard);
+  if(isAmrap){
+    const chkCard=mkDiv('card','margin-bottom:11px');
+    chkCard.innerHTML=`<div style="font-weight:700;font-size:12px;margin-bottom:6px">📋 확인 사항</div>`;
+    const checks=isInd
+      ?[['aChk1','본인이 실제 수행한 기록입니다.'],['aChk2','동작을 정확히 수행하려고 노력했습니다.']]
+      :[['aChk1','팀원 또는 기록자가 동작 수행을 확인했습니다.'],['aChk2','허위 기록이 아니며 실제 수행한 기록입니다.']];
+    checks.forEach(([key,label])=>{
+      const row=mkDiv('check-row','');
+      const cb=document.createElement('input');cb.type='checkbox';cb.checked=S[key];
+      cb.onchange=e=>{S[key]=e.target.checked;render();};
+      row.appendChild(cb);row.appendChild(mkDiv('','font-size:12px;line-height:1.4',label));
+      chkCard.appendChild(row);
+    });
+    wrap.appendChild(chkCard);
+  }
 
   const saveBtn=mkBtn('btn-p','margin-top:auto',`💾 ${isInd?'기록 저장':'우리 팀 기록 저장'}`,doSaveRecord);
   if(wod.type==='AMRAP'&&(!S.aChk1||!S.aChk2))saveBtn.disabled=true;
