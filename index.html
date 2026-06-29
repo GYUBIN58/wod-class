@@ -432,6 +432,7 @@ let S = {
   screen: 'schoolSelect', tab:'home', user:null,
   // 학교 선택
   superAdminMode:false, superAdminInput:false, superAdminCode:'', superAdminErr:'',
+  superSchoolTab:null, superOpenTeacher:null,
   selectedSchoolId: stor.get('selected_school_id', 'wolchon'),
   schoolAddMode: false, schoolAddName:'', schoolAddCode:'', schoolAddErr:'',
   records: stor.get((stor.get('selected_school_id','wolchon'))+'_wod_records',[]),
@@ -698,94 +699,203 @@ function doAddSchool(){
 // 슈퍼 관리자 대시보드
 // ═══════════════════════════════════════════
 function buildSuperAdmin(){
-  const wrap=mkDiv('','min-height:100vh;background:var(--bg);padding:20px;overflow-y:auto');
-  const hdr=mkDiv('','display:flex;align-items:center;gap:10px;margin-bottom:20px');
-  hdr.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:8px 8px 8px 0',ic.back,()=>setState({screen:'schoolSelect'})));
+  const wrap=mkDiv('','min-height:100vh;background:var(--bg);padding:16px;overflow-y:auto;padding-bottom:40px');
+
+  // 헤더
+  const hdr=mkDiv('','display:flex;align-items:center;gap:10px;margin-bottom:16px');
+  hdr.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:8px 8px 8px 0;font-size:20px',ic.back,()=>setState({screen:'schoolSelect'})));
   hdr.appendChild(mkDiv('tf','font-size:20px;color:var(--accent)','🔐 슈퍼 관리자'));
+  hdr.appendChild(mkBtn('btn-s','margin-left:auto;font-size:11px;padding:6px 12px','☁️ 동기화',async()=>{
+    showToast('동기화 중...');
+    if(window.fbLoadAll) await window.fbLoadAll();
+    showToast('완료 ✅'); render();
+  }));
   wrap.appendChild(hdr);
 
   const schools=getSchools();
 
   // 전체 통계
-  let totalRecs=0, totalTeachers=0;
-  schools.forEach(school=>{
-    const sid=school.id;
-    const recs=stor.get(sid+'_wod_records',[]);
-    const teachers=stor.get('teacher_accounts_'+sid,[]);
-    totalRecs+=recs.length;
-    totalTeachers+=teachers.length;
+  let totalRecs=0,totalTeachers=0,totalWods=0;
+  schools.forEach(sid2=>{
+    const sid=sid2.id;
+    totalRecs+=stor.get(sid+'_wod_records',[]).length;
+    totalTeachers+=stor.get('teacher_accounts_'+sid,[]).length;
+    const tList=stor.get('teacher_accounts_'+sid,[]);
+    tList.forEach(t=>{ totalWods+=stor.get(sid+'_wod_list_'+t.id,[]).length; });
   });
-
-  const statsRow=mkDiv('','display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:20px');
-  [[schools.length+'개','등록 학교'],[totalTeachers+'명','전체 교사'],[totalRecs+'개','전체 기록']].forEach(([val,label])=>{
-    statsRow.innerHTML+=`<div class="card" style="text-align:center"><div style="font-size:22px;font-weight:900;color:var(--accent)">${val}</div><div style="font-size:10px;color:var(--muted)">${label}</div></div>`;
+  const statsRow=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:16px');
+  [[schools.length,'학교'],[totalTeachers,'교사'],[totalWods,'WOD'],[totalRecs,'기록']].forEach(([v,l])=>{
+    statsRow.innerHTML+=`<div class="card" style="text-align:center;padding:10px"><div style="font-size:20px;font-weight:900;color:var(--accent)">${v}</div><div style="font-size:10px;color:var(--muted)">${l}</div></div>`;
   });
   wrap.appendChild(statsRow);
 
-  // 학교별 상세
-  wrap.appendChild(mkDiv('','font-weight:700;font-size:14px;margin-bottom:10px',`학교별 현황`));
-  schools.forEach(school=>{
-    const sid=school.id;
-    const recs=stor.get(sid+'_wod_records',[]);
-    const teachers=stor.get('teacher_accounts_'+sid,[]);
-    const card=mkDiv('card','margin-bottom:10px');
-    card.innerHTML=`
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div><div style="font-weight:700;font-size:15px">${school.name}</div>
-        <div style="font-size:10px;color:var(--muted)">${sid}</div></div>
-        <div style="font-size:11px;color:var(--muted)">교사 ${teachers.length}명 · 기록 ${recs.length}개</div>
-      </div>`;
+  // 현재 선택된 학교 탭
+  if(!S.superSchoolTab) S.superSchoolTab=schools[0]?.id||'wolchon';
+  const schoolTabs=mkDiv('','display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:4px');
+  schools.forEach(s=>{
+    schoolTabs.appendChild(mkBtn(`chip ${S.superSchoolTab===s.id?'on':''}`,`flex-shrink:0;font-size:12px;padding:8px 12px`,s.name,()=>{S.superSchoolTab=s.id;render();}));
+  });
+  wrap.appendChild(schoolTabs);
 
-    // 해당 학교로 이동 버튼
-    const btnRow=mkDiv('','display:flex;gap:6px');
-    btnRow.appendChild(mkBtn('btn-p','flex:1;font-size:12px','입장',async ()=>{
-      S.selectedSchoolId=sid;
-      stor.set('selected_school_id',sid);
-      S.records=stor.get(sid+'_wod_records',[]);
-      if(window.fbLoadAll) await window.fbLoadAll();
-      setState({screen:'login',user:null,lStep:1,lAdminMode:true,lTeacherId:'',lAdminId:'',lAdminPw:''});
-    }));
-    // 학교 삭제 (wolchon은 삭제 불가)
-    if(sid!=='wolchon'){
-      const delBtn=mkBtn('btn-d','flex:0.4;font-size:12px',ic.trash,()=>{
-        delBtn.textContent='확인?';
-        delBtn.onclick=()=>{
-          const list=getSchools().filter(s=>s.id!==sid);
-          saveSchools(list);
-          // localStorage 데이터도 삭제
-          const keys=['wod_records','exam_records_2학년','wod_current_by_teacher','teacher_classes','wod_history_by_teacher'];
-          keys.forEach(k=>stor.set(sid+'_'+k,null));
-          showToast(`${school.name} 삭제됨`);
-          render();
+  const curSid=S.superSchoolTab||'wolchon';
+  const curSchool=schools.find(s=>s.id===curSid)||schools[0];
+  const teachers=stor.get('teacher_accounts_'+curSid,[]);
+  const allRecs=stor.get(curSid+'_wod_records',[]);
+
+  // 학교 헤더
+  const schoolHdr=mkDiv('card','margin-bottom:10px;background:linear-gradient(135deg,#6366f115,#8b5cf615);border:2px solid var(--accent)20');
+  schoolHdr.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between">
+    <div><div style="font-weight:900;font-size:16px">${curSchool?.name}</div>
+    <div style="font-size:10px;color:var(--muted)">교사 ${teachers.length}명 · 기록 ${allRecs.length}개</div></div>
+    ${curSid!=='wolchon'?`<button class="btn-d" style="font-size:11px;padding:6px 10px" id="del-school-btn">🗑 학교삭제</button>`:''}
+  </div>`;
+  if(curSid!=='wolchon'){
+    wrap.appendChild(schoolHdr);
+    const delSchoolBtn=schoolHdr.querySelector('#del-school-btn');
+    if(delSchoolBtn) delSchoolBtn.addEventListener('click',()=>{
+      delSchoolBtn.textContent='정말 삭제?';
+      delSchoolBtn.onclick=()=>{
+        saveSchools(getSchools().filter(s=>s.id!==curSid));
+        ['wod_records','exam_records_2학년','wod_current_by_teacher','teacher_classes'].forEach(k=>stor.set(curSid+'_'+k,null));
+        S.superSchoolTab=schools[0]?.id||'wolchon';
+        showToast('학교 삭제됨');render();
+      };
+    });
+  } else {
+    wrap.appendChild(schoolHdr);
+  }
+
+  // 교사별 상세 관리
+  if(teachers.length===0){
+    wrap.appendChild(mkDiv('card','text-align:center;color:var(--muted);padding:20px','등록된 교사가 없습니다'));
+  }
+
+  teachers.forEach(t=>{
+    const tRecs=allRecs.filter(r=>r.teacherId===t.id);
+    const wodList=stor.get(curSid+'_wod_list_'+t.id,[]);
+    const isOpen=S.superOpenTeacher===t.id;
+
+    const card=mkDiv('card','margin-bottom:8px');
+
+    // 교사 헤더
+    const tHdr=mkDiv('','display:flex;align-items:center;gap:8px;cursor:pointer');
+    tHdr.innerHTML=`
+      <div style="width:36px;height:36px;border-radius:50%;background:var(--asoft);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">👨‍🏫</div>
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:14px">${t.name}</div>
+        <div style="font-size:10px;color:var(--muted)">ID: ${t.id} · WOD ${wodList.length}개 · 기록 ${tRecs.length}개</div>
+      </div>
+      <div style="color:var(--muted);font-size:18px">${isOpen?'▲':'▼'}</div>`;
+    tHdr.addEventListener('click',()=>{S.superOpenTeacher=isOpen?null:t.id;render();});
+    card.appendChild(tHdr);
+
+    if(isOpen){
+      const detail=mkDiv('','margin-top:12px;padding-top:12px;border-top:1px solid var(--border)');
+
+      // 교사 삭제
+      const dangerRow=mkDiv('','display:flex;gap:6px;margin-bottom:12px');
+      const delTBtn=mkBtn('btn-d','flex:1;font-size:12px',ic.trash+' 교사 삭제',()=>{
+        delTBtn.textContent='정말 삭제?';
+        delTBtn.onclick=()=>{
+          const newList=teachers.filter(x=>x.id!==t.id);
+          stor.set('teacher_accounts_'+curSid,newList);
+          // 해당 교사 기록도 삭제
+          const newRecs=allRecs.filter(r=>r.teacherId!==t.id);
+          stor.set(curSid+'_wod_records',newRecs);
+          S.records=newRecs;
+          showToast(`${t.name} 삭제됨`);render();
         };
       });
-      btnRow.appendChild(delBtn);
-    }
-    card.appendChild(btnRow);
+      dangerRow.appendChild(delTBtn);
 
-    // 교사 목록
-    if(teachers.length>0){
-      const tList=mkDiv('','margin-top:10px;padding-top:10px;border-top:1px solid var(--border)');
-      tList.innerHTML=`<div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:6px">교사 목록</div>`;
-      teachers.forEach(t=>{
-        const tRecs=recs.filter(r=>r.teacherId===t.id);
-        tList.innerHTML+=`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;border-bottom:1px solid var(--border)">
-          <span style="font-weight:600">${t.name}</span>
-          <span style="color:var(--muted)">기록 ${tRecs.length}개</span>
-        </div>`;
-      });
-      card.appendChild(tList);
+      // 해당 교사로 관리자 입장
+      dangerRow.appendChild(mkBtn('btn-b','flex:1;font-size:12px','🔑 관리자로 입장',async()=>{
+        S.selectedSchoolId=curSid;
+        stor.set('selected_school_id',curSid);
+        S.records=stor.get(curSid+'_wod_records',[]);
+        if(window.fbLoadAll) await window.fbLoadAll();
+        setState({
+          screen:'admin',
+          user:{class:'ALL',team:'교사',name:t.name,teacherId:t.id,isAdmin:true},
+          adminWod:null,adminWodEditId:null,
+          adminClassList:getTeacherClasses(t.id)||[]
+        });
+      }));
+      detail.appendChild(dangerRow);
+
+      // WOD 목록
+      if(wodList.length>0){
+        detail.appendChild(mkDiv('','font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px',`WOD 목록 (${wodList.length}개)`));
+        const activeIds=getActiveWodIds(t.id);
+        wodList.forEach(w=>{
+          const isActive=activeIds.includes(w.id);
+          const wRow=mkDiv('','background:var(--card2);border-radius:10px;padding:8px 10px;margin-bottom:5px;display:flex;align-items:center;gap:8px');
+          wRow.innerHTML=`
+            <div style="flex:1">
+              <div style="font-size:12px;font-weight:700">${w.title}</div>
+              <div style="font-size:10px;color:var(--muted)">${w.type} · ${w.exercises?.length||0}가지 운동</div>
+            </div>
+            <span class="badge ${isActive?'bg':''}'" style="${isActive?'':'color:var(--muted)'}">${isActive?'공개중':'비공개'}</span>`;
+
+          // WOD 편집 버튼
+          const editBtn=mkBtn('btn-s','font-size:10px;padding:4px 8px;border-radius:8px','✏️ 편집',()=>{
+            S.selectedSchoolId=curSid;
+            stor.set('selected_school_id',curSid);
+            setState({
+              screen:'admin',adminTab:'wod',
+              user:{class:'ALL',team:'교사',name:t.name,teacherId:t.id,isAdmin:true},
+              adminWod:{...w,exercises:[...(w.exercises||[])],exerciseDescs:[...(w.exerciseDescs||[])]},
+              adminWodEditId:w.id,
+              adminClassList:getTeacherClasses(t.id)||[]
+            });
+          });
+          wRow.appendChild(editBtn);
+
+          // WOD 삭제
+          const delWBtn=mkBtn('','font-size:10px;padding:4px 6px;border-radius:8px;background:none;border:1px solid var(--red);color:var(--red)',ic.trash,()=>{
+            const newList=wodList.filter(x=>x.id!==w.id);
+            setWodList(t.id,newList);
+            const newIds=activeIds.filter(id=>id!==w.id);
+            setActiveWodIds(t.id,newIds);
+            fbSaveWodList(t.id,newList);
+            fbSaveActiveWodIds(t.id,newIds);
+            showToast('WOD 삭제됨');render();
+          });
+          wRow.appendChild(delWBtn);
+          detail.appendChild(wRow);
+        });
+      } else {
+        detail.appendChild(mkDiv('','font-size:11px;color:var(--muted);margin-bottom:8px','등록된 WOD 없음'));
+      }
+
+      // 기록 요약
+      if(tRecs.length>0){
+        detail.appendChild(mkDiv('','font-size:12px;font-weight:700;color:var(--muted);margin-top:8px;margin-bottom:6px',`기록 (${tRecs.length}개)`));
+        const recSummary=mkDiv('','background:var(--card2);border-radius:10px;padding:8px 10px');
+        const byClass={};
+        tRecs.forEach(r=>{byClass[r.class]=(byClass[r.class]||0)+1;});
+        recSummary.innerHTML=Object.entries(byClass).sort().map(([cls,cnt])=>`<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0"><span>${cls}</span><span style="color:var(--muted)">${cnt}개</span></div>`).join('');
+        detail.appendChild(recSummary);
+
+        // 전체 기록 삭제
+        const delRecBtn=mkBtn('btn-d','margin-top:6px;font-size:11px',ic.trash+' 이 교사 기록 전체 삭제',()=>{
+          delRecBtn.textContent='정말 삭제?';
+          delRecBtn.onclick=()=>{
+            tRecs.forEach(r=>fbDeleteRecord(r.id));
+            const newRecs=allRecs.filter(r=>r.teacherId!==t.id);
+            stor.set(curSid+'_wod_records',newRecs);
+            S.records=newRecs;
+            save();
+            showToast('기록 삭제됨');render();
+          };
+        });
+        detail.appendChild(delRecBtn);
+      }
+
+      card.appendChild(detail);
     }
     wrap.appendChild(card);
   });
-
-  // Firebase 전체 동기화 버튼
-  wrap.appendChild(mkBtn('btn-s','margin-top:10px','☁️ Firebase 전체 동기화',async ()=>{
-    showToast('동기화 중...');
-    if(window.fbLoadAll) await window.fbLoadAll();
-    showToast('동기화 완료 ✅');
-    render();
-  }));
 
   return wrap;
 }
