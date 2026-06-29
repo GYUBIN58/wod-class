@@ -662,6 +662,7 @@ function buildSchoolSelect(){
   }
 
   wrap.appendChild(mkDiv('','text-align:center;color:var(--border);font-size:10px;margin-top:24px','WOD CLASS · 학교 체육수업 관리 시스템'));
+  wrap.appendChild(mkDiv('','text-align:center;font-size:10px;margin-top:4px;margin-bottom:8px','<span style="color:var(--muted)">Developed by </span><span style="color:var(--accent);font-weight:700">규빈쌤 🏃</span>'));
   return wrap;
 }
 
@@ -1141,6 +1142,7 @@ function buildLogin(){
     }
   }
   wrap.appendChild(mkDiv('','text-align:center;color:var(--border);font-size:11px;margin-top:22px',(getCurrentSchool()?.name||'월촌중학교')+' 체육수업'));
+  wrap.appendChild(mkDiv('','text-align:center;font-size:10px;margin-top:4px;margin-bottom:8px','<span style="color:var(--muted)">Developed by </span><span style="color:var(--accent);font-weight:700">규빈쌤 🏃</span>'));
   return wrap;
 }
 
