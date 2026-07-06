@@ -470,6 +470,23 @@ const DEFAULT_WOD = {
   exercises:['50m 달리기','점프스쿼트 10회','버피 5회','파머스캐리 20m'],
   date:new Date().toISOString().slice(0,10)
 };
+// EMOM 카운트다운 소리
+function playBeep(freq=880, duration=0.1, volume=0.3){
+  try {
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    const osc=ctx.createOscillator();
+    const gain=ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value=freq;
+    osc.type='sine';
+    gain.gain.setValueAtTime(volume,ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+duration);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime+duration);
+  } catch(e){}
+}
+
 function schoolKey(key){ return (S.selectedSchoolId||'wolchon')+'_'+key; }
 function getWodForTeacher(tid){ const map=stor.get(schoolKey('wod_current_by_teacher'),{}); return map[tid]||{...DEFAULT_WOD}; }
 function getWodList(tid){ return stor.get(schoolKey('wod_list_'+tid),[]); }
@@ -1497,16 +1514,14 @@ function startWorkTimer(){
     workInt=setInterval(()=>{
       if(S.eTimeLeft<=1){
         if(S.eRestPhase){
-          // 휴식 끝 → 다음 라운드 운동 시작 (60초 새로 시작)
           if(S.eRound>totalRounds){
             clearInterval(workInt);
             setState({eTimeLeft:0,eRunning:false,eDone:true,eRestPhase:false});
             return;
           }
           S.eRestPhase=false;
-          S.eTimeLeft=60; // 다음 라운드 운동은 60초 새로 시작
+          S.eTimeLeft=60;
         } else {
-          // 1분 다 됐는데 완료 안 누름 → 60초 소요로 기록 후 다음 라운드
           S.eRoundLogs=[...S.eRoundLogs,{round:S.eRound,time:60,auto:true}];
           S.eRound++;
           if(S.eRound>totalRounds){
@@ -1518,7 +1533,16 @@ function startWorkTimer(){
         }
         render(); return;
       }
-      S.eTimeLeft--; render();
+      S.eTimeLeft--;
+      // 마지막 10초 삐 소리 (운동 중일 때만)
+      if(!S.eRestPhase && S.eTimeLeft<=10){
+        if(S.eTimeLeft===3||S.eTimeLeft===2||S.eTimeLeft===1){
+          playBeep(1200,0.15,0.5); // 높은 소리
+        } else {
+          playBeep(880,0.08,0.3); // 낮은 소리
+        }
+      }
+      render();
     },1000);
   } else {
     workInt=setInterval(()=>{
