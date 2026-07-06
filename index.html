@@ -472,7 +472,6 @@ const DEFAULT_WOD = {
 };
 function schoolKey(key){ return (S.selectedSchoolId||'wolchon')+'_'+key; }
 function getWodForTeacher(tid){ const map=stor.get(schoolKey('wod_current_by_teacher'),{}); return map[tid]||{...DEFAULT_WOD}; }
-function setWodForTeacher(tid,wod){ const map=stor.get(schoolKey('wod_current_by_teacher'),{}); map[tid]=wod; stor.set(schoolKey('wod_current_by_teacher'),map); }
 function getWodList(tid){ return stor.get(schoolKey('wod_list_'+tid),[]); }
 function setWodList(tid,list){ stor.set(schoolKey('wod_list_'+tid),list); }
 function getActiveWodIds(tid){ return stor.get(schoolKey('wod_active_'+tid),[]); }
@@ -1884,7 +1883,7 @@ function buildForTime(){
       wrap.appendChild(cancelBtn);
     }
   } else {
-    wrap.appendChild(mkBtn('btn-p','margin-bottom:7px','기록 저장하기 →',()=>{ clearInterval(workInt); const m=Math.floor(S.fElapsed/60),s=S.fElapsed%60; setState({screen:'saveRecord',srTimeMin:m,srTimeSec:s,aChk1:false,aChk2:false}); }));
+    wrap.appendChild(mkBtn('btn-p','margin-bottom:7px','기록 저장하기 →',()=>{ clearInterval(workInt); const m=Math.floor(S.fElapsed/60),s=Math.floor(S.fElapsed)%60; setState({screen:'saveRecord',srTimeMin:m,srTimeSec:s,aChk1:false,aChk2:false}); }));
   }
 
   const ctrl=mkDiv('','display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:7px');
