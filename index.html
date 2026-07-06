@@ -1560,8 +1560,15 @@ function buildAmrap(){
   timerWrap.appendChild(timerInner);
   wrap.appendChild(timerWrap);
 
-  // 현재 운동 크게 표시
-  wrap.appendChild(mkDiv('ex-big','',`<div style="color:var(--muted);font-size:11px;margin-bottom:4px">현재 운동 (${S.aCurExIdx%exercises.length+1}/${exercises.length})</div><div style="font-size:22px;font-weight:900;color:var(--accent)">${curEx}</div>`));
+  const curExIdx2=S.aCurExIdx%exercises.length;
+  const rxStr=(wod.exerciseRx||[])[curExIdx2];
+  const scStr=(wod.exerciseScale||[])[curExIdx2];
+  wrap.appendChild(mkDiv('ex-big','',`<div style="color:var(--muted);font-size:11px;margin-bottom:4px">현재 운동 (${curExIdx2+1}/${exercises.length})</div>
+    <div style="font-size:22px;font-weight:900;color:var(--accent)">${curEx}</div>
+    <div style="display:flex;gap:10px;justify-content:center;margin-top:6px;flex-wrap:wrap">
+      ${rxStr?`<span style="background:#3b82f620;color:var(--blue);border-radius:8px;padding:3px 10px;font-size:12px;font-weight:700">💪 RxD: ${rxStr}</span>`:''}
+      ${scStr?`<span style="background:#10b98120;color:var(--green);border-radius:8px;padding:3px 10px;font-size:12px;font-weight:700">🔧 Scale: ${scStr}</span>`:''}
+    </div>`));
   wrap.appendChild(mkDiv('ex-next','',`<div style="color:var(--muted);font-size:10px;margin-bottom:2px">다음 운동</div><div style="font-size:15px;font-weight:700">${nextEx}</div>`));
 
   // 다음 운동 버튼
@@ -1726,13 +1733,25 @@ function buildEmom(){
     // 다음 라운드 운동 미리보기
     const previewCard=mkDiv('','background:var(--card);border-radius:14px;padding:14px;margin-bottom:10px');
     previewCard.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:700">다음 라운드 운동</div>
-      ${exercises.map((ex,i)=>`<div style="padding:6px 0;border-bottom:${i<exercises.length-1?'1px solid var(--border)':'none'};font-size:13px;font-weight:600">${i+1}. ${ex}</div>`).join('')}`;
+      ${exercises.map((ex,i)=>`<div style="padding:6px 0;border-bottom:${i<exercises.length-1?'1px solid var(--border)':'none'}">
+        <div style="font-size:13px;font-weight:700">${i+1}. ${ex}</div>
+        <div style="display:flex;gap:8px;margin-top:2px">
+          ${(wod.exerciseRx||[])[i]?`<span style="font-size:11px;color:var(--blue);font-weight:700">💪 RxD: ${(wod.exerciseRx||[])[i]}</span>`:''}
+          ${(wod.exerciseScale||[])[i]?`<span style="font-size:11px;color:var(--green);font-weight:700">🔧 Scale: ${(wod.exerciseScale||[])[i]}</span>`:''}
+        </div>
+      </div>`).join('')}`;
     wrap.appendChild(previewCard);
   } else {
     // 운동 중 - 전체 운동 목록 표시
     const exCard=mkDiv('','background:var(--card);border-radius:16px;padding:14px;margin-bottom:10px;border:2px solid var(--green)');
     exCard.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:700">🏋️ ${S.eRound}라운드 — 아래 운동을 모두 완료하세요!</div>
-      ${exercises.map((ex,i)=>`<div style="padding:8px 0;border-bottom:${i<exercises.length-1?'1px solid var(--border)':'none'};font-size:15px;font-weight:700">${i+1}. ${ex}</div>`).join('')}`;
+      ${exercises.map((ex,i)=>`<div style="padding:8px 0;border-bottom:${i<exercises.length-1?'1px solid var(--border)':'none'}">
+        <div style="font-size:15px;font-weight:700">${i+1}. ${ex}</div>
+        <div style="display:flex;gap:8px;margin-top:3px">
+          ${(wod.exerciseRx||[])[i]?`<span style="font-size:12px;color:var(--blue);font-weight:700">💪 RxD: ${(wod.exerciseRx||[])[i]}</span>`:''}
+          ${(wod.exerciseScale||[])[i]?`<span style="font-size:12px;color:var(--green);font-weight:700">🔧 Scale: ${(wod.exerciseScale||[])[i]}</span>`:''}
+        </div>
+      </div>`).join('')}`;
     wrap.appendChild(exCard);
 
     // 완료 버튼
@@ -1798,8 +1817,16 @@ function buildForTime(){
   wrap.appendChild(timerCard);
 
   if(!S.fDone){
+    const curExIdx3=S.fCurExIdx%exercises.length;
+    const rxStr2=(wod.exerciseRx||[])[curExIdx3];
+    const scStr2=(wod.exerciseScale||[])[curExIdx3];
     // 현재 운동 크게
-    wrap.appendChild(mkDiv('ex-big','border-color:var(--blue)',`<div style="color:var(--muted);font-size:11px;margin-bottom:4px">현재 운동 (${S.fCurExIdx%exercises.length+1}/${exercises.length})</div><div style="font-size:22px;font-weight:900;color:var(--blue)">${curEx}</div>`));
+    wrap.appendChild(mkDiv('ex-big','border-color:var(--blue)',`<div style="color:var(--muted);font-size:11px;margin-bottom:4px">현재 운동 (${curExIdx3+1}/${exercises.length})</div>
+      <div style="font-size:22px;font-weight:900;color:var(--blue)">${curEx}</div>
+      <div style="display:flex;gap:10px;justify-content:center;margin-top:6px;flex-wrap:wrap">
+        ${rxStr2?`<span style="background:#3b82f620;color:var(--blue);border-radius:8px;padding:3px 10px;font-size:12px;font-weight:700">💪 RxD: ${rxStr2}</span>`:''}
+        ${scStr2?`<span style="background:#10b98120;color:var(--green);border-radius:8px;padding:3px 10px;font-size:12px;font-weight:700">🔧 Scale: ${scStr2}</span>`:''}
+      </div>`));
     wrap.appendChild(mkDiv('ex-next','',`<div style="color:var(--muted);font-size:10px;margin-bottom:2px">다음 운동</div><div style="font-size:14px;font-weight:700">${nextEx}</div>`));
 
     // 다음 운동 버튼
@@ -3012,8 +3039,17 @@ function syncAdminWodInputs(){
   // 운동 목록 - DOM에서 직접 읽기
   const exInps=document.querySelectorAll('.admin-ex-inp');
   if(exInps.length>0){
-    // DOM 인풋 수만큼 exercises 배열 맞춤
     S.adminWod.exercises=Array.from(exInps).map(inp=>inp.value||'');
+  }
+  const rxInps=document.querySelectorAll('.admin-ex-rx');
+  if(rxInps.length>0){
+    if(!S.adminWod.exerciseRx) S.adminWod.exerciseRx=[];
+    S.adminWod.exerciseRx=Array.from(rxInps).map(inp=>inp.value||'');
+  }
+  const scInps=document.querySelectorAll('.admin-ex-scale');
+  if(scInps.length>0){
+    if(!S.adminWod.exerciseScale) S.adminWod.exerciseScale=[];
+    S.adminWod.exerciseScale=Array.from(scInps).map(inp=>inp.value||'');
   }
 
   // 운동 설명
@@ -3129,12 +3165,42 @@ function buildAdminWodForm(){
       S.adminWod.exercises.splice(i,1);
       if(!S.adminWod.exerciseDescs) S.adminWod.exerciseDescs=[];
       S.adminWod.exerciseDescs.splice(i,1);
+      if(!S.adminWod.exerciseRx) S.adminWod.exerciseRx=[];
+      S.adminWod.exerciseRx.splice(i,1);
+      if(!S.adminWod.exerciseScale) S.adminWod.exerciseScale=[];
+      S.adminWod.exerciseScale.splice(i,1);
       render();
     }));
     const rowHeader=mkDiv('','display:flex;gap:4px;align-items:center;margin-bottom:5px');
     rowHeader.innerHTML=`<span style="color:var(--accent);font-weight:700;min-width:18px;font-size:11px">${i+1}.</span>`;
     rowHeader.appendChild(nameWrap);
     row.appendChild(rowHeader);
+
+    // RxD / Scale 횟수 입력
+    const rxScaleRow=mkDiv('','display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px');
+    const rxWrap=mkDiv('','');
+    rxWrap.appendChild(mkDiv('','font-size:10px;font-weight:700;color:var(--blue);margin-bottom:3px','💪 RxD'));
+    const rxInp=mkInp('inp',{type:'text',value:(aw.exerciseRx||[])[i]||'',placeholder:'예: 10회'},v=>{
+      if(!S.adminWod.exerciseRx) S.adminWod.exerciseRx=[];
+      S.adminWod.exerciseRx[i]=v;
+    });
+    rxInp.className='inp admin-ex-rx';
+    rxInp.style.cssText='font-size:13px;padding:8px 10px';
+    rxWrap.appendChild(rxInp);
+
+    const scWrap=mkDiv('','');
+    scWrap.appendChild(mkDiv('','font-size:10px;font-weight:700;color:var(--green);margin-bottom:3px','🔧 Scale'));
+    const scInp=mkInp('inp',{type:'text',value:(aw.exerciseScale||[])[i]||'',placeholder:'예: 7회 (밴드)'},v=>{
+      if(!S.adminWod.exerciseScale) S.adminWod.exerciseScale=[];
+      S.adminWod.exerciseScale[i]=v;
+    });
+    scInp.className='inp admin-ex-scale';
+    scInp.style.cssText='font-size:13px;padding:8px 10px';
+    scWrap.appendChild(scInp);
+
+    rxScaleRow.appendChild(rxWrap);
+    rxScaleRow.appendChild(scWrap);
+    row.appendChild(rxScaleRow);
     // 운동 설명 입력
     const descLabel=mkDiv('','font-size:10px;color:var(--muted);margin-bottom:3px','💡 운동 설명 (시뮬레이션에 표시됨)');
     const di=document.createElement('textarea');
