@@ -471,9 +471,17 @@ const DEFAULT_WOD = {
   date:new Date().toISOString().slice(0,10)
 };
 // EMOM 카운트다운 소리
+let _audioCtx=null;
+function getAudioCtx(){
+  if(!_audioCtx||_audioCtx.state==='closed'){
+    _audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  }
+  if(_audioCtx.state==='suspended') _audioCtx.resume();
+  return _audioCtx;
+}
 function playBeep(freq=880, duration=0.1, volume=0.3){
   try {
-    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    const ctx=getAudioCtx();
     const osc=ctx.createOscillator();
     const gain=ctx.createGain();
     osc.connect(gain);
@@ -1502,7 +1510,7 @@ function startCountdown(){
 
 function buildWorkoutCountdown(){
   const wrap=mkDiv('','min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;background:var(--bg);padding:20px');
-  wrap.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px;display:flex;align-items:center;gap:5px;position:absolute;top:18px;left:18px',ic.back+' 취소',()=>{ clearInterval(cdInt); clearInterval(workInt); setState({screen:'main',wPhase:'ready'}); }));
+  wrap.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px;display:flex;align-items:center;gap:5px;position:absolute;top:18px;left:18px',ic.back+' 취소',()=>{ clearInterval(cdInt); clearInterval(workInt); if(window._workWakeLock){window._workWakeLock.release();window._workWakeLock=null;} setState({screen:'main',wPhase:'ready'}); }));
   const inner=mkDiv('','display:flex;flex-direction:column;align-items:center;gap:13px');
   inner.innerHTML=`<div style="color:var(--muted);font-size:15px;font-weight:600">준비하세요!</div>
     <div class="pulse tf" style="font-size:100px;color:var(--accent);line-height:1">${S.wCountdown}</div>
@@ -1514,12 +1522,16 @@ function buildWorkoutCountdown(){
 
 function startWorkTimer(){
   clearInterval(workInt);
+  // 화면 꺼짐 방지
+  if('wakeLock' in navigator && !window._workWakeLock){
+    navigator.wakeLock.request('screen').then(lock=>{window._workWakeLock=lock;}).catch(()=>{});
+  }
   const wod=getActiveWod();
   if(wod.type==='AMRAP'){
     workInt=setInterval(()=>{
       if(S.aCooldown>0)S.aCooldown--;
       if(S.aExCooldown>0)S.aExCooldown--;
-      if(S.aTimeLeft<=1){ clearInterval(workInt); setState({aTimeLeft:0,aRunning:false,aDone:true}); return; }
+      if(S.aTimeLeft<=1){ clearInterval(workInt); speak('운동 종료!'); if(window._workWakeLock){window._workWakeLock.release();window._workWakeLock=null;} setState({aTimeLeft:0,aRunning:false,aDone:true}); return; }
       S.aTimeLeft--;
       // 1분 남았을 때 음성 안내
       if(S.aTimeLeft===60) speak('1분 남았습니다!');
@@ -1543,6 +1555,7 @@ function startWorkTimer(){
         if(S.eRestPhase){
           if(S.eRound>totalRounds){
             clearInterval(workInt);
+            speak('운동 종료!');
             setState({eTimeLeft:0,eRunning:false,eDone:true,eRestPhase:false});
             return;
           }
@@ -1553,6 +1566,7 @@ function startWorkTimer(){
           S.eRound++;
           if(S.eRound>totalRounds){
             clearInterval(workInt);
+            speak('운동 종료!');
             setState({eTimeLeft:0,eRunning:false,eDone:true,eRestPhase:false});
             return;
           }
@@ -1600,7 +1614,7 @@ function buildAmrap(){
   }
 
   const hdr=mkDiv('','display:flex;align-items:center;margin-bottom:8px');
-  const backBtn=mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px',ic.back,()=>{ clearInterval(cdInt); clearInterval(workInt); setState({screen:'main',wPhase:'ready'}); });
+  const backBtn=mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px',ic.back,()=>{ clearInterval(cdInt); clearInterval(workInt); if(window._workWakeLock){window._workWakeLock.release();window._workWakeLock=null;} setState({screen:'main',wPhase:'ready'}); });
   hdr.appendChild(backBtn);
   hdr.appendChild(mkDiv('tf','flex:1;text-align:center;font-size:15px',wod.title));
   hdr.appendChild(mkDiv('','font-size:13px;font-weight:700;color:var(--accent)',S.aSets+'세트'));
@@ -1762,7 +1776,7 @@ function buildEmom(){
   }
 
   const hdr=mkDiv('','display:flex;align-items:center;margin-bottom:8px');
-  hdr.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px',ic.back,()=>{ clearInterval(cdInt); clearInterval(workInt); setState({screen:'main',wPhase:'ready'}); }));
+  hdr.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px',ic.back,()=>{ clearInterval(cdInt); clearInterval(workInt); if(window._workWakeLock){window._workWakeLock.release();window._workWakeLock=null;} setState({screen:'main',wPhase:'ready'}); }));
   hdr.appendChild(mkDiv('tf','flex:1;text-align:center;font-size:15px',wod.title));
   hdr.appendChild(mkDiv('','font-size:13px;font-weight:700;color:var(--accent)',`${S.eRound}/${totalRounds}라운드`));
   wrap.appendChild(hdr);
@@ -1862,7 +1876,7 @@ function buildForTime(){
   const wrap=mkDiv('','min-height:100vh;display:flex;flex-direction:column;padding:13px;background:var(--bg)');
 
   const hdr=mkDiv('','display:flex;align-items:center;margin-bottom:8px');
-  hdr.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px',ic.back,()=>{ clearInterval(cdInt); clearInterval(workInt); setState({screen:'main',wPhase:'ready'}); }));
+  hdr.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px',ic.back,()=>{ clearInterval(cdInt); clearInterval(workInt); if(window._workWakeLock){window._workWakeLock.release();window._workWakeLock=null;} setState({screen:'main',wPhase:'ready'}); }));
   hdr.appendChild(mkDiv('tf','flex:1;text-align:center;font-size:15px',wod.title));
   wrap.appendChild(hdr);
 
