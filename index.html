@@ -538,11 +538,11 @@ let S = {
   mrSearch:'',
   // admin
   // 체력측정
-  examPhase:'input', examName:'', examCls:'', examStartTime:null, examEndTime:null,
+  examPhase:'input', examName:'', examCls:'', examGrade:'2', examStartTime:null, examEndTime:null,
   examCurStep:0, examErr:'', examTotalSec:0, examResult:null, examRankCls:'전체',
   adminTab:'wod', adminWod:null, adminNewEx:'', adminWodEditId:null,
   adminWodSimId:null,
-  simData:null, simSlide:0, simPlaying:false,
+  simData:null, simSlide:0, simPlaying:false, simFromStudent:false,
   adminClearTarget:'all', adminConfirm:false,
   adminFilterCls:'all', adminFilterMode:'all', adminFilterGrade:'all',
   adminExpandRecord:null,
@@ -1361,8 +1361,8 @@ function buildHome(){
   const tl=wod.timeLimit||(wod.timeLimitMin||10)*60+(wod.timeLimitSec||0);
 
   let myRec=isInd
-    ?clsRecs.find(r=>r.name===S.user?.name&&r.wodType===wod.type)
-    :clsRecs.find(r=>r.team===S.user?.team&&r.mode==='team'&&r.wodType===wod.type);
+    ?clsRecs.find(r=>r.name===S.user?.name&&r.wodType===wod.type&&r.wodTitle===wod.title)
+    :clsRecs.find(r=>r.team===S.user?.team&&r.mode==='team'&&r.wodType===wod.type&&r.wodTitle===wod.title);
   let topRec=null;
   if(wod.type==='AMRAP'&&clsRecs.length>0)topRec=clsRecs.reduce((a,b)=>a.sets>b.sets||(a.sets===b.sets&&a.reps>b.reps)?a:b);
   else if(wod.type==='EMOM'&&clsRecs.length>0)topRec=clsRecs.reduce((a,b)=>(a.sets||0)>=(b.sets||0)?a:b);
@@ -1416,7 +1416,13 @@ function buildWorkoutReady(){
   const isInd=S.user?.mode==='individual';
   const tl=wod.timeLimit||(wod.timeLimitMin||10)*60+(wod.timeLimitSec||0);
   const wrap=mkDiv('','min-height:100vh;padding:18px;display:flex;flex-direction:column;background:var(--bg)');
-  wrap.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px;display:flex;align-items:center;gap:5px;margin-bottom:14px',ic.back+' 돌아가기',()=>setState({screen:'main'})));
+  wrap.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px;display:flex;align-items:center;gap:5px;margin-bottom:14px',ic.back+' 돌아가기',()=>{
+    const wod2=getActiveWod();
+    setState({screen:'workout',wPhase:'working'});
+    if(wod2.type==='AMRAP'&&S.aRunning)startWorkTimer();
+    else if(wod2.type==='EMOM'&&S.eRunning)startWorkTimer();
+    else if(wod2.type==='ForTime'&&S.fRunning)startWorkTimer();
+  }));
   const c=mkDiv('card','margin-bottom:13px;border:1px solid #f9731630');
   const typeColor=wod.type==='AMRAP'?'bo':wod.type==='EMOM'?'bg':'bb';
   const typeDesc=wod.type==='AMRAP'
@@ -1430,7 +1436,13 @@ function buildWorkoutReady(){
       ${wod.type==='AMRAP'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${fmtTime(tl)}</span>`:wod.type==='EMOM'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.emomRounds||3}라운드</span>`:`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.targetSets}세트</span>`}
     </div>
     <div style="background:var(--card2);border-radius:9px;padding:9px 11px;font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">${typeDesc}</div>
-    ${(wod.exercises||[]).map((ex,i)=>`<div style="padding:6px 0;${i<(wod.exercises||[]).length-1?'border-bottom:1px solid var(--border)':''}display:flex;gap:6px;font-size:13px"><span style="color:var(--accent);font-weight:700">${i+1}.</span>${ex}</div>`).join('')}`;
+    ${(wod.exercises||[]).map((ex,i)=>`<div style="padding:6px 0;${i<(wod.exercises||[]).length-1?'border-bottom:1px solid var(--border)':''}">
+      <div style="display:flex;gap:6px;font-size:13px;font-weight:600"><span style="color:var(--accent);font-weight:700">${i+1}.</span>${ex}</div>
+      <div style="display:flex;gap:6px;margin-top:2px;margin-left:16px">
+        ${(wod.exerciseRx||[])[i]?`<span style="font-size:11px;color:var(--blue);font-weight:700">💪 RxD: ${(wod.exerciseRx||[])[i]}</span>`:''}
+        ${(wod.exerciseScale||[])[i]?`<span style="font-size:11px;color:var(--green);font-weight:700">🔧 Scale: ${(wod.exerciseScale||[])[i]}</span>`:''}
+      </div>
+    </div>`).join('')}`;
   if(!isInd)c.innerHTML+=`<div style="margin-top:8px;background:var(--card2);border-radius:7px;padding:6px 8px;font-size:11px;color:var(--muted)">👥 참여 팀원: ${S.user?.members?.join(', ')}</div>`;
   wrap.appendChild(c);
   // 시뮬레이션 버튼
