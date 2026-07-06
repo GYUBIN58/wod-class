@@ -937,7 +937,7 @@ function buildSuperAdmin(){
             setState({
               screen:'admin',adminTab:'wod',
               user:{class:'ALL',team:'교사',name:t.name,teacherId:t.id,isAdmin:true},
-              adminWod:{...w,exercises:[...(w.exercises||[])],exerciseDescs:[...(w.exerciseDescs||[])]},
+              adminWod:{...w,exercises:[...(w.exercises||[])],exerciseDescs:[...(w.exerciseDescs||[])],exerciseRx:[...(w.exerciseRx||[])],exerciseScale:[...(w.exerciseScale||[])]},
               adminWodEditId:w.id,
               adminClassList:getTeacherClasses(t.id)||[]
             });
@@ -2453,7 +2453,10 @@ function buildWodSim(){
           :`🎯 아래 운동들을 순서대로 ${wod.targetSets}세트 완료하는 운동입니다!`});
       exercises.forEach((ex,i)=>{
         const desc=(wod.exerciseDescs||[])[i]||'선생님이 설명을 입력하지 않았습니다.';
-        slides.push({type:'exercise',emoji:'💪',exNum:i+1,exName:ex,desc,tip:`⭐ ${i+1}/${exercises.length}번째 운동`});
+        const rx=(wod.exerciseRx||[])[i];
+        const sc=(wod.exerciseScale||[])[i];
+        const rxScTip=rx||sc?`${rx?`💪 RxD: ${rx}`:''}${rx&&sc?' / ':''}${sc?`🔧 Scale: ${sc}`:''}`:null;
+        slides.push({type:'exercise',emoji:'💪',exNum:i+1,exName:ex,desc,rxScTip,tip:`⭐ ${i+1}/${exercises.length}번째 운동`});
       });
       slides.push({type:'transition',title:'운동 순서',
         desc:exercises.map((ex,i)=>`${i+1}. ${ex}`).join('\n')
@@ -2486,7 +2489,11 @@ function buildWodSim(){
       slideCard.innerHTML=`
         <div style="background:var(--asoft);border-radius:12px;padding:5px 12px;font-size:11px;color:var(--accent);font-weight:700;margin-bottom:10px">운동 ${slide.exNum} / ${exercises.length}</div>
         <div style="font-size:36px;margin-bottom:6px">${slide.emoji||'💪'}</div>
-        <div style="font-size:20px;font-weight:900;color:var(--accent);margin-bottom:12px">${slide.exName}</div>
+        <div style="font-size:20px;font-weight:900;color:var(--accent);margin-bottom:8px">${slide.exName}</div>
+        ${slide.rxScTip?`<div style="display:flex;gap:8px;justify-content:center;margin-bottom:10px;flex-wrap:wrap">
+          ${(wod.exerciseRx||[])[slide.exNum-1]?`<span style="background:#3b82f620;color:var(--blue);border-radius:8px;padding:4px 10px;font-size:13px;font-weight:700">💪 RxD: ${(wod.exerciseRx||[])[slide.exNum-1]}</span>`:''}
+          ${(wod.exerciseScale||[])[slide.exNum-1]?`<span style="background:#10b98120;color:var(--green);border-radius:8px;padding:4px 10px;font-size:13px;font-weight:700">🔧 Scale: ${(wod.exerciseScale||[])[slide.exNum-1]}</span>`:''}
+        </div>`:''}
         <div style="font-size:13px;color:var(--text);line-height:1.8;margin-bottom:10px;text-align:left;white-space:pre-line">${slide.desc}</div>
         <div style="background:var(--card2);border-radius:10px;padding:8px 14px;font-size:12px;color:var(--yellow)">${slide.tip||''}</div>`;
     } else if(slide.type==='transition'){
@@ -2996,7 +3003,7 @@ function buildAdminWod(){
       // 편집 버튼
       btnRow2.appendChild(mkBtn('btn-s',`flex:1;font-size:11px;padding:7px`,'✏️ 편집',()=>{
         setState({
-          adminWod:{...w,exercises:[...(w.exercises||[])],exerciseDescs:[...(w.exerciseDescs||[])]},
+          adminWod:{...w,exercises:[...(w.exercises||[])],exerciseDescs:[...(w.exerciseDescs||[])],exerciseRx:[...(w.exerciseRx||[])],exerciseScale:[...(w.exerciseScale||[])]},
           adminWodEditId:w.id
         });
       }));
@@ -3218,9 +3225,9 @@ function buildAdminWodForm(){
   });
   const addRow=mkDiv('','display:flex;gap:4px;margin-top:4px');
   const newExInp=mkInp('inp',{type:'text',placeholder:'운동 추가',value:S.adminNewEx||''},v=>{S.adminNewEx=v;});
-  newExInp.addEventListener('keydown',e=>{if(e.key==='Enter'&&S.adminNewEx?.trim()){syncAdminWodInputs();S.adminWod.exercises=[...(S.adminWod.exercises||[]),S.adminNewEx.trim()];S.adminNewEx='';render();}});
+  newExInp.addEventListener('keydown',e=>{if(e.key==='Enter'&&S.adminNewEx?.trim()){syncAdminWodInputs();S.adminWod.exercises=[...(S.adminWod.exercises||[]),S.adminNewEx.trim()];if(!S.adminWod.exerciseRx)S.adminWod.exerciseRx=[];S.adminWod.exerciseRx.push('');if(!S.adminWod.exerciseScale)S.adminWod.exerciseScale=[];S.adminWod.exerciseScale.push('');S.adminNewEx='';render();}});
   addRow.appendChild(newExInp);
-  addRow.appendChild(mkBtn('btn-g','width:42px;border-radius:10px',ic.plus,()=>{if(S.adminNewEx?.trim()){syncAdminWodInputs();S.adminWod.exercises=[...(S.adminWod.exercises||[]),S.adminNewEx.trim()];S.adminNewEx='';render();}}));
+  addRow.appendChild(mkBtn('btn-g','width:42px;border-radius:10px',ic.plus,()=>{if(S.adminNewEx?.trim()){syncAdminWodInputs();S.adminWod.exercises=[...(S.adminWod.exercises||[]),S.adminNewEx.trim()];if(!S.adminWod.exerciseRx)S.adminWod.exerciseRx=[];S.adminWod.exerciseRx.push('');if(!S.adminWod.exerciseScale)S.adminWod.exerciseScale=[];S.adminWod.exerciseScale.push('');S.adminNewEx='';render();}}));
   c5.appendChild(addRow);
   wrap.appendChild(c5);
 
