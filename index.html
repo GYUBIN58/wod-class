@@ -174,6 +174,11 @@ window.fbSaveClasses = async function(tid, classes) {
 // 앱 시작 시 Firestore에서 전체 데이터 불러오기
 window.fbLoadAll = async function() {
   try {
+    // 변수 먼저 정의
+    const stor = window._stor;
+    const schoolId = (window._S?.selectedSchoolId||'wolchon');
+    const sKey = k => schoolId+'_'+k;
+
     // 기록 불러오기 (현재 학교 것만)
     const recSnap = await getDocs(collection(db, 'records'));
     const fbRecs = [];
@@ -200,28 +205,31 @@ window.fbLoadAll = async function() {
     const classMap = {};
     classSnap.forEach(d => { const data=d.data(); if(!data.schoolId||data.schoolId===schoolId) classMap[d.id]=data.classes; });
 
-    // WOD 목록 불러오기 (학교별)
+    // WOD 목록 불러오기 (학교별 - 구버전 키도 포함)
     const wodListSnap = await getDocs(collection(db, 'wod_lists'));
     const wodListMap = {};
     wodListSnap.forEach(d => {
       const data=d.data();
-      if(!data.schoolId||data.schoolId===schoolId){
-        // doc id가 schoolId_tid 형식이면 tid만 추출
-        const docId=d.id;
-        const tid=docId.startsWith(schoolId+'_')?docId.slice(schoolId.length+1):docId;
-        wodListMap[tid] = data.list || [];
+      const docId=d.id;
+      if(docId.startsWith(schoolId+'_')){
+        const tid=docId.slice(schoolId.length+1);
+        if(!wodListMap[tid]) wodListMap[tid]=data.list||[];
+      } else if(!data.schoolId||data.schoolId===schoolId){
+        if(!wodListMap[docId]) wodListMap[docId]=data.list||[];
       }
     });
 
-    // WOD 공개 목록 불러오기 (학교별)
+    // WOD 공개 목록 불러오기 (학교별 - 구버전 키도 포함)
     const wodActiveSnap = await getDocs(collection(db, 'wod_active_ids'));
     const wodActiveMap = {};
     wodActiveSnap.forEach(d => {
       const data=d.data();
-      if(!data.schoolId||data.schoolId===schoolId){
-        const docId=d.id;
-        const tid=docId.startsWith(schoolId+'_')?docId.slice(schoolId.length+1):docId;
-        wodActiveMap[tid] = data.ids || [];
+      const docId=d.id;
+      if(docId.startsWith(schoolId+'_')){
+        const tid=docId.slice(schoolId.length+1);
+        if(!wodActiveMap[tid]) wodActiveMap[tid]=data.ids||[];
+      } else if(!data.schoolId||data.schoolId===schoolId){
+        if(!wodActiveMap[docId]) wodActiveMap[docId]=data.ids||[];
       }
     });
 
@@ -230,21 +238,11 @@ window.fbLoadAll = async function() {
     teachers4migration.forEach(t=>{
       const oldList = stor.get('wod_list_'+t.id, []);
       const newList = stor.get(sKey('wod_list_'+t.id), []);
-      if(oldList.length>0 && newList.length===0){
-        stor.set(sKey('wod_list_'+t.id), oldList);
-      }
+      if(oldList.length>0 && newList.length===0) stor.set(sKey('wod_list_'+t.id), oldList);
       const oldIds = stor.get('wod_active_'+t.id, []);
       const newIds = stor.get(sKey('wod_active_'+t.id), []);
-      if(oldIds.length>0 && newIds.length===0){
-        stor.set(sKey('wod_active_'+t.id), oldIds);
-      }
+      if(oldIds.length>0 && newIds.length===0) stor.set(sKey('wod_active_'+t.id), oldIds);
     });
-
-    // 로컬과 병합 (Firestore 우선, 로컬에만 있는 것도 유지)
-    const stor = window._stor;
-
-    const schoolId = (window._S?.selectedSchoolId||'wolchon');
-    const sKey = k => schoolId+'_'+k;
 
     // 로컬 저장
     const recKey = sKey('wod_records');
@@ -267,15 +265,13 @@ window.fbLoadAll = async function() {
     // WOD 병합 (학교별)
     if(Object.keys(wodMap).length > 0) {
       const localWods = stor.get(sKey('wod_current_by_teacher'), {});
-      const merged = { ...localWods, ...wodMap };
-      stor.set(sKey('wod_current_by_teacher'), merged);
+      stor.set(sKey('wod_current_by_teacher'), { ...localWods, ...wodMap });
     }
 
     // 담당 반 병합 (학교별)
     if(Object.keys(classMap).length > 0) {
       const localClasses = stor.get(sKey('teacher_classes'), {});
-      const mergedClasses = { ...localClasses, ...classMap };
-      stor.set(sKey('teacher_classes'), mergedClasses);
+      stor.set(sKey('teacher_classes'), { ...localClasses, ...classMap });
     }
 
     // WOD 목록 병합 (학교별)
@@ -299,7 +295,10 @@ window.fbLoadAll = async function() {
     // 체력측정 기록 불러오기 (Firebase → 로컬 병합, 학교별)
     const examSnap = await getDocs(collection(db, 'exam_records'));
     const fbExamRecs = [];
-    examSnap.forEach(d => fbExamRecs.push(d.data()));
+    examSnap.forEach(d => {
+      const data=d.data();
+      if(!data.schoolId||data.schoolId===schoolId) fbExamRecs.push(data);
+    });
     if(fbExamRecs.length > 0) {
       const examStorKey = sKey('exam_records_2학년');
       const localExam = stor.get(examStorKey, []);
@@ -1998,6 +1997,8 @@ function doSaveRecord(){
     teacherName:teacher?.name||'',
     wodTitle:wod.title,
     wodType:wod.type,
+    exerciseRx:[...(wod.exerciseRx||[])],
+    exerciseScale:[...(wod.exerciseScale||[])],
     ...(wod.type==='AMRAP'
       ?{sets:S.srSets,reps:S.srReps,checkLogs:[...S.aCheckLogs],completedExercisesLog:[...S.aExLog]}
       :wod.type==='EMOM'
@@ -2149,7 +2150,7 @@ function buildExam(){
       const examGradeTab=mkDiv('','display:flex;gap:6px;margin-bottom:8px;width:100%;max-width:400px');
       ['1','2','3'].forEach(g=>{
         const isOn=(S.examGrade||'2')===g;
-        examGradeTab.appendChild(mkBtn(`chip ${isOn?'on':''}`,`flex:1;font-size:12px;padding:8px`,g+'학년',()=>{S.examGrade=g;S.examCls='';const root2=document.getElementById('root');root2.innerHTML='';root2.appendChild(buildExam());}));
+        examGradeTab.appendChild(mkBtn(`chip ${isOn?'on':''}`,`flex:1;font-size:12px;padding:8px`,g+'학년',()=>{S.examGrade=g;S.examCls='';save();const root2=document.getElementById('root');root2.innerHTML='';root2.appendChild(buildExam());}));
       });
       sc.appendChild(examGradeTab);
 
