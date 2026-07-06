@@ -487,6 +487,19 @@ function playBeep(freq=880, duration=0.1, volume=0.3){
   } catch(e){}
 }
 
+// 음성 안내
+function speak(text){
+  try {
+    const utter=new SpeechSynthesisUtterance(text);
+    utter.lang='ko-KR';
+    utter.rate=1.1;
+    utter.pitch=1;
+    utter.volume=1;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utter);
+  } catch(e){}
+}
+
 function schoolKey(key){ return (S.selectedSchoolId||'wolchon')+'_'+key; }
 function getWodForTeacher(tid){ const map=stor.get(schoolKey('wod_current_by_teacher'),{}); return map[tid]||{...DEFAULT_WOD}; }
 function getWodList(tid){ return stor.get(schoolKey('wod_list_'+tid),[]); }
@@ -1507,7 +1520,21 @@ function startWorkTimer(){
       if(S.aCooldown>0)S.aCooldown--;
       if(S.aExCooldown>0)S.aExCooldown--;
       if(S.aTimeLeft<=1){ clearInterval(workInt); setState({aTimeLeft:0,aRunning:false,aDone:true}); return; }
-      S.aTimeLeft--; render();
+      S.aTimeLeft--;
+      // 1분 남았을 때 음성 안내
+      if(S.aTimeLeft===60) speak('1분 남았습니다!');
+      // 30초 남았을 때 음성 안내
+      if(S.aTimeLeft===30) speak('30초 남았습니다!');
+      // 마지막 10초 카운트다운
+      if(S.aTimeLeft<=10 && S.aTimeLeft>0){
+        if(S.aTimeLeft===3||S.aTimeLeft===2||S.aTimeLeft===1){
+          playBeep(1200,0.15,0.5);
+          speak(String(S.aTimeLeft));
+        } else {
+          playBeep(880,0.08,0.3);
+        }
+      }
+      render();
     },1000);
   } else if(wod.type==='EMOM'){
     const totalRounds=wod.emomRounds||3;
@@ -1537,9 +1564,10 @@ function startWorkTimer(){
       // 마지막 10초 삐 소리 (운동 중일 때만)
       if(!S.eRestPhase && S.eTimeLeft<=10){
         if(S.eTimeLeft===3||S.eTimeLeft===2||S.eTimeLeft===1){
-          playBeep(1200,0.15,0.5); // 높은 소리
+          playBeep(1200,0.15,0.5);
+          speak(String(S.eTimeLeft));
         } else {
-          playBeep(880,0.08,0.3); // 낮은 소리
+          playBeep(880,0.08,0.3);
         }
       }
       render();
