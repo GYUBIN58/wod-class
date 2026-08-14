@@ -1114,7 +1114,7 @@ function startCountdown(){
       clearInterval(cdInt);
       const wod=getActiveWod();
       const tl=wod.timeLimit||(wod.timeLimitMin||10)*60+(wod.timeLimitSec||0);
-      setState({wPhase:'working',aTimeLeft:tl,aSets:0,aRunning:true,aDone:false,aCheckLogs:[],aCooldown:0,aExCooldown:10,aCurExIdx:0,aExLog:[],fElapsed:0,fRunning:true,fDone:false,fSets:0,fSetLogs:[],fCurExIdx:0,fExLog:[],fExCooldown:15,eTimeLeft:60,eRound:1,eRunning:true,eDone:false,eExIdx:0});
+      setState({wPhase:'working',aTimeLeft:tl,aSets:0,aRunning:true,aDone:false,aCheckLogs:[],aCooldown:0,aExCooldown:10,aCurExIdx:0,aExLog:[],fElapsed:0,fRunning:true,fDone:false,fSets:0,fSetLogs:[],fCurExIdx:0,fExLog:[],fExCooldown:10,eTimeLeft:60,eRound:1,eRunning:true,eDone:false,eExIdx:0});
       startWorkTimer();
       return;
     }
@@ -1278,7 +1278,7 @@ function completeAmrapSet(){
   const abnormal=prevLog&&(elapsed-prevLog.elapsed)<20;
   S.aSets++;
   S.aCheckLogs=[...S.aCheckLogs,{set:S.aSets,elapsed,timeLeft:S.aTimeLeft,createdAt:new Date().toISOString(),abnormal}];
-  S.aCooldown=15;
+  S.aCooldown=10;
   S.aCurExIdx=0;
   showToast(abnormal?'⚠️ 너무 빠른 체크!':'✅ 세트 완료!',abnormal?'error':'success');
 }
@@ -1411,7 +1411,7 @@ function buildForTime(){
         S.fSetLogs=[...S.fSetLogs,{set:S.fSets+1,elapsed:S.fElapsed,createdAt:new Date().toISOString()}];
         S.fSets=S.fSets+1;
         S.fCurExIdx=0;
-        S.fExCooldown=15;
+        S.fExCooldown=10;
         if(S.fSets>=targetSets){
           clearInterval(workInt);
           S.fRunning=false;
