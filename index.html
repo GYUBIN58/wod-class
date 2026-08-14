@@ -2626,7 +2626,7 @@ function buildAdminWod(){
       // 편집 버튼
       btnRow2.appendChild(mkBtn('btn-s',`flex:1;font-size:11px;padding:7px`,'✏️ 편집',()=>{
         setState({
-          adminWod:{...w,exercises:[...(w.exercises||[])],exerciseDescs:[...(w.exerciseDescs||[])]},
+          adminWod:{...w,exercises:[...(w.exercises||[])],exerciseDescs:[...(w.exerciseDescs||[])],exerciseRx:[...(w.exerciseRx||[])],exerciseScale:[...(w.exerciseScale||[])]},
           adminWodEditId:w.id
         });
       }));
@@ -2741,20 +2741,45 @@ function buildAdminWodForm(){
   c5.innerHTML='<div style="font-weight:700;font-size:13px;margin-bottom:9px">운동 목록</div>';
   (aw.exercises||[]).forEach((ex,i)=>{
     const row=mkDiv('','margin-bottom:10px;background:var(--card2);border-radius:10px;padding:8px');
-    row.innerHTML=`<div style="display:flex;gap:4px;align-items:center;margin-bottom:5px">
-      <span style="color:var(--accent);font-weight:700;min-width:18px;font-size:11px">${i+1}.</span>`;
-    const nameWrap=mkDiv('','display:flex;gap:4px;flex:1;align-items:center');
+
+    // 번호 + 이름 + 삭제
+    const nameRow=mkDiv('','display:flex;gap:4px;align-items:center;margin-bottom:6px');
+    nameRow.innerHTML=`<span style="color:var(--accent);font-weight:700;min-width:18px;font-size:11px">${i+1}.</span>`;
     const ei=mkInp('inp',{type:'text',value:ex,placeholder:'운동 이름'},v=>{S.adminWod.exercises[i]=v;});
-    ei.style.flex='1';
-    nameWrap.appendChild(ei);
-    nameWrap.appendChild(mkBtn('','background:none;border:none;color:var(--red);padding:4px',ic.trash,()=>{
+    ei.className='inp admin-ex-inp'; ei.style.flex='1';
+    nameRow.appendChild(ei);
+    nameRow.appendChild(mkBtn('','background:none;border:none;color:var(--red);padding:4px',ic.trash,()=>{
       S.adminWod.exercises.splice(i,1);
       if(!S.adminWod.exerciseDescs) S.adminWod.exerciseDescs=[];
       S.adminWod.exerciseDescs.splice(i,1);
+      if(!S.adminWod.exerciseRx) S.adminWod.exerciseRx=[];
+      S.adminWod.exerciseRx.splice(i,1);
+      if(!S.adminWod.exerciseScale) S.adminWod.exerciseScale=[];
+      S.adminWod.exerciseScale.splice(i,1);
       render();
     }));
-    row.appendChild(nameWrap);
-    row.innerHTML+='</div>';
+    row.appendChild(nameRow);
+
+    // RxD / Scale 입력
+    const rxScRow=mkDiv('','display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px');
+    const rxWrap=mkDiv('','');
+    rxWrap.appendChild(mkDiv('','font-size:10px;font-weight:700;color:var(--blue);margin-bottom:3px','💪 RxD (기준 횟수)'));
+    const rxInp=mkInp('inp',{type:'text',value:(aw.exerciseRx||[])[i]||'',placeholder:'예: 10회'},v=>{
+      if(!S.adminWod.exerciseRx) S.adminWod.exerciseRx=[];
+      S.adminWod.exerciseRx[i]=v;
+    });
+    rxInp.className='inp admin-ex-rx'; rxInp.style.cssText='font-size:13px;padding:8px 10px';
+    rxWrap.appendChild(rxInp);
+    const scWrap=mkDiv('','');
+    scWrap.appendChild(mkDiv('','font-size:10px;font-weight:700;color:var(--green);margin-bottom:3px','🔧 Scale (쉬운 버전)'));
+    const scInp=mkInp('inp',{type:'text',value:(aw.exerciseScale||[])[i]||'',placeholder:'예: 7회 (밴드)'},v=>{
+      if(!S.adminWod.exerciseScale) S.adminWod.exerciseScale=[];
+      S.adminWod.exerciseScale[i]=v;
+    });
+    scInp.className='inp admin-ex-scale'; scInp.style.cssText='font-size:13px;padding:8px 10px';
+    scWrap.appendChild(scInp);
+    rxScRow.appendChild(rxWrap); rxScRow.appendChild(scWrap);
+    row.appendChild(rxScRow);
     // 운동 설명 입력
     const descLabel=mkDiv('','font-size:10px;color:var(--muted);margin-bottom:3px','💡 운동 설명 (시뮬레이션에 표시됨)');
     const di=document.createElement('textarea');
@@ -2774,7 +2799,16 @@ function buildAdminWodForm(){
   const newExInp=mkInp('inp',{type:'text',placeholder:'운동 추가',value:S.adminNewEx||''},v=>{S.adminNewEx=v;});
   newExInp.addEventListener('keydown',e=>{if(e.key==='Enter'&&S.adminNewEx?.trim()){S.adminWod.exercises=[...(S.adminWod.exercises||[]),S.adminNewEx.trim()];S.adminNewEx='';render();}});
   addRow.appendChild(newExInp);
-  addRow.appendChild(mkBtn('btn-g','width:42px;border-radius:10px',ic.plus,()=>{if(S.adminNewEx?.trim()){S.adminWod.exercises=[...(S.adminWod.exercises||[]),S.adminNewEx.trim()];S.adminNewEx='';render();}}));
+  addRow.appendChild(mkBtn('btn-g','width:42px;border-radius:10px',ic.plus,()=>{
+    if(S.adminNewEx?.trim()){
+      S.adminWod.exercises=[...(S.adminWod.exercises||[]),S.adminNewEx.trim()];
+      if(!S.adminWod.exerciseRx) S.adminWod.exerciseRx=[];
+      S.adminWod.exerciseRx.push('');
+      if(!S.adminWod.exerciseScale) S.adminWod.exerciseScale=[];
+      S.adminWod.exerciseScale.push('');
+      S.adminNewEx='';render();
+    }
+  }));
   c5.appendChild(addRow);
   wrap.appendChild(c5);
 
