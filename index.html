@@ -477,7 +477,7 @@ let S = {
   examPhase:'input', examName:'', examCls:'', examStartTime:null, examEndTime:null,
   examCurStep:0, examErr:'', examTotalSec:0, examResult:null, examRankCls:'전체',
   adminTab:'wod', adminWod:null, adminNewEx:'', adminWodEditId:null,
-  adminWodSimId:null,
+  adminWodSimId:null, adminTeamCls:'',
   simData:null, simSlide:0, simPlaying:false,
   adminClearTarget:'all', adminConfirm:false,
   adminFilterCls:'all', adminFilterMode:'all',
@@ -839,12 +839,32 @@ function buildLogin(){
         ni.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
         wrap.appendChild(ni);
       } else {
+        // 저장된 팀 목록 가져오기
+        const savedTeams=stor.get(schoolKey('saved_teams_'+S.lCls),[]);
+        const savedTeamNames=savedTeams.map(t=>t.name);
+
         wrap.appendChild(lbl('팀 선택'));
         const tg2=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:10px');
         makeTeams(tc).forEach(t=>{
-          tg2.appendChild(mkBtn(`chip ${S.lTeam===t?'on':''}`,`font-size:11px;padding:7px 2px`,t,()=>setState({lTeam:t,lErr:''})));
+          tg2.appendChild(mkBtn(`chip ${S.lTeam===t?'on':''}`,`font-size:11px;padding:7px 2px`,t,()=>{
+            S.lTeam=t;
+            // 저장된 팀이면 멤버 자동 로드
+            const saved=savedTeams.find(st=>st.name===t);
+            if(saved) S.lMembers=[...saved.members];
+            else S.lMembers=[];
+            render();
+          }));
         });
         wrap.appendChild(tg2);
+
+        // 저장된 팀 멤버 표시 or 입력
+        if(S.lTeam){
+          const saved=savedTeams.find(st=>st.name===S.lTeam);
+          if(saved){
+            wrap.appendChild(mkDiv('','font-size:11px;color:var(--green);font-weight:700;margin-bottom:6px','✅ 저장된 팀 자동 로드됨'));
+          }
+        }
+
         wrap.appendChild(lbl('참여 팀원 입력 (최소 1명)'));
         const mr=mkDiv('','display:flex;gap:6px;margin-bottom:7px');
         const mi=mkInp('inp',{type:'text',placeholder:'팀원 이름',value:S.lMemberInput},v=>{S.lMemberInput=v});
@@ -860,6 +880,22 @@ function buildLogin(){
             ml.appendChild(tag);
           });
           wrap.appendChild(ml);
+          // 팀 저장 버튼
+          if(S.lTeam && S.lMembers.length>0){
+            const teamKey=schoolKey('saved_teams_'+S.lCls);
+            const isAlreadySaved=savedTeams.some(st=>st.name===S.lTeam&&JSON.stringify(st.members)===JSON.stringify(S.lMembers));
+            if(!isAlreadySaved){
+              wrap.appendChild(mkBtn('btn-s','font-size:12px;margin-bottom:7px','💾 이 팀 구성 저장',()=>{
+                const existing=stor.get(teamKey,[]);
+                const idx=existing.findIndex(st=>st.name===S.lTeam);
+                if(idx>=0) existing[idx]={name:S.lTeam,members:[...S.lMembers]};
+                else existing.push({name:S.lTeam,members:[...S.lMembers]});
+                stor.set(teamKey,existing);
+                showToast('팀 구성 저장됨 ✅');
+                render();
+              }));
+            }
+          }
         }
       }
 
@@ -2459,7 +2495,7 @@ function buildAdmin(){
   wrap.appendChild(hdr);
 
   const tabRow=mkDiv('','display:flex;background:var(--card);border-bottom:1px solid var(--border);overflow-x:auto');
-  [['wod','WOD 설정'],['classes','담당 반'],['records','기록 관리']].forEach(([v,l])=>{
+  [['wod','WOD 설정'],['classes','담당 반'],['records','기록 관리'],['teams','👥 팀 관리']].forEach(([v,l])=>{
     tabRow.appendChild(mkBtn('',`padding:9px 13px;background:none;border:none;font-family:'Noto Sans KR';white-space:nowrap;font-size:12px;color:${S.adminTab===v?'var(--accent)':'var(--muted)'};font-weight:${S.adminTab===v?700:400};border-bottom:${S.adminTab===v?'2px solid var(--accent)':'2px solid transparent'}`,l,()=>setState({adminTab:v})));
   });
   wrap.appendChild(tabRow);
@@ -2468,6 +2504,7 @@ function buildAdmin(){
   if(S.adminTab==='wod')sc.appendChild(buildAdminWod());
   else if(S.adminTab==='classes')sc.appendChild(buildAdminClasses());
   else if(S.adminTab==='records')sc.appendChild(buildAdminRecords());
+  else if(S.adminTab==='teams')sc.appendChild(buildAdminTeams());
 
   // 로그아웃
   const logoutBtn=mkBtn('btn-d','margin:16px 13px 30px','🚪 교사 로그아웃',()=>setState({screen:'schoolSelect',user:null,lAdminMode:false,lAdminId:'',lAdminPw:'',adminWod:null,adminClassList:null}));
@@ -2711,6 +2748,84 @@ function buildAdminWodForm(){
 }
 
 // ── 관리자: 담당 반 설정 ──
+function buildAdminTeams(){
+  const tid=S.user?.teacherId;
+  const myClasses=getClassesForTeacher(tid);
+  const wrap=mkDiv('','');
+  wrap.appendChild(mkDiv('','font-weight:700;font-size:15px;margin-bottom:12px','👥 팀 관리'));
+
+  // 반 선택
+  const selCls=S.adminTeamCls||myClasses[0]||'';
+  if(!S.adminTeamCls&&myClasses[0]) S.adminTeamCls=myClasses[0];
+
+  const clsRow=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:14px');
+  myClasses.slice(0,16).forEach(c=>{
+    clsRow.appendChild(mkBtn(`chip ${selCls===c?'on':''}`,`font-size:11px;padding:7px 2px`,c,()=>{S.adminTeamCls=c;render();}));
+  });
+  wrap.appendChild(mkDiv('','font-size:11px;color:var(--muted);font-weight:700;margin-bottom:6px','반 선택'));
+  wrap.appendChild(clsRow);
+
+  if(!selCls){ wrap.appendChild(mkDiv('','color:var(--muted);text-align:center;padding:20px','반을 선택하세요')); return wrap; }
+
+  const teamKey=schoolKey('saved_teams_'+selCls);
+  const teams=stor.get(teamKey,[]);
+
+  if(teams.length===0){
+    wrap.appendChild(mkDiv('card','color:var(--muted);text-align:center;padding:20px',`${selCls}에 저장된 팀이 없습니다.<br><small>학생들이 처음 팀 구성 저장하면 여기 표시됩니다.</small>`));
+  } else {
+    teams.forEach((team,ti)=>{
+      const card=mkDiv('card','margin-bottom:10px');
+      card.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-weight:700;font-size:14px">${selCls} ${team.name}</div>
+        <div style="font-size:11px;color:var(--muted)">${team.members.length}명</div>
+      </div>`;
+
+      // 멤버 태그
+      const ml=mkDiv('','display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px');
+      team.members.forEach((m,mi)=>{
+        const tag=mkDiv('','display:flex;align-items:center;gap:3px;background:var(--card2);border:1px solid var(--border);border-radius:16px;padding:3px 8px;font-size:12px',`<span>${m}</span>`);
+        // 멤버 삭제
+        tag.appendChild(mkBtn('','background:none;border:none;color:var(--red);padding:0;font-size:10px',ic.trash,()=>{
+          teams[ti].members.splice(mi,1);
+          stor.set(teamKey,teams);
+          showToast('멤버 삭제됨');render();
+        }));
+        ml.appendChild(tag);
+      });
+      card.appendChild(ml);
+
+      // 멤버 추가
+      const addRow=mkDiv('','display:flex;gap:6px;margin-bottom:8px');
+      const addInp=mkInp('inp',{type:'text',placeholder:'멤버 추가'},()=>{});
+      addInp.id=`team-add-${ti}`;
+      addRow.appendChild(addInp);
+      addRow.appendChild(mkBtn('btn-g','width:44px;border-radius:10px',ic.plus,()=>{
+        const v=document.getElementById(`team-add-${ti}`)?.value?.trim();
+        if(!v)return;
+        if(!teams[ti].members.includes(v)){
+          teams[ti].members.push(v);
+          stor.set(teamKey,teams);
+          showToast('멤버 추가됨');render();
+        }
+      }));
+      card.appendChild(addRow);
+
+      // 팀 삭제
+      const delBtn=mkBtn('btn-d','font-size:12px',ic.trash+' 팀 삭제',()=>{
+        delBtn.textContent='정말 삭제?';
+        delBtn.onclick=()=>{
+          teams.splice(ti,1);
+          stor.set(teamKey,teams);
+          showToast('팀 삭제됨');render();
+        };
+      });
+      card.appendChild(delBtn);
+      wrap.appendChild(card);
+    });
+  }
+  return wrap;
+}
+
 function buildAdminClasses(){
   const tid=S.user?.teacherId;
   if(!S.adminClassList)S.adminClassList=[...getTeacherClasses(tid)||[]];
