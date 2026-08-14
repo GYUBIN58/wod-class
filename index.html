@@ -843,19 +843,34 @@ function buildLogin(){
         ni.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
         wrap.appendChild(ni);
       } else {
-        // 저장된 팀 목록 가져오기
-        const savedTeams=stor.get(schoolKey('saved_teams_'+S.lCls),[]);
+        // 저장된 팀 목록 가져오기 (새키/구키 모두 확인)
+        const newKey=schoolKey('saved_teams_'+S.lCls);
+        const oldKey='saved_teams_'+S.lCls;
+        const savedTeamsNew=stor.get(newKey,[]);
+        const savedTeamsOld=stor.get(oldKey,[]);
+        // 구버전 데이터가 있으면 새 키로 마이그레이션
+        if(savedTeamsOld.length>0&&savedTeamsNew.length===0){
+          stor.set(newKey,savedTeamsOld);
+          stor.set(oldKey,null);
+        }
+        const savedTeams=stor.get(newKey,[]);
         const savedTeamNames=savedTeams.map(t=>t.name);
 
         wrap.appendChild(lbl('팀 선택'));
-        const tg2=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:10px');
+        const tg2=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:6px');
         makeTeams(tc).forEach(t=>{
-          tg2.appendChild(mkBtn(`chip ${S.lTeam===t?'on':''}`,`font-size:11px;padding:7px 2px`,t,()=>{
-            const saved=savedTeams.find(st=>st.name===t);
-            setState({lTeam:t,lMembers:saved?[...saved.members]:[],lErr:''});
-          }));
+          const hasSaved=savedTeams.some(st=>st.name===t);
+          tg2.appendChild(mkBtn(`chip ${S.lTeam===t?'on':''}`,`font-size:11px;padding:7px 2px;position:relative`,
+            t+(hasSaved?'<span style="position:absolute;top:2px;right:2px;width:6px;height:6px;background:var(--green);border-radius:50%"></span>':''),
+            ()=>{
+              const saved=savedTeams.find(st=>st.name===t);
+              setState({lTeam:t,lMembers:saved?[...saved.members]:[],lErr:''});
+            }));
         });
         wrap.appendChild(tg2);
+        if(savedTeams.length>0){
+          wrap.appendChild(mkDiv('','font-size:10px;color:var(--muted);margin-bottom:8px','● 표시 = 저장된 팀 구성 있음 (선택 시 자동 로드)'));
+        }
 
         // 저장된 팀 멤버 표시 or 입력
         if(S.lTeam){
