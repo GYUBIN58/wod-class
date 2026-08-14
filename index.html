@@ -366,6 +366,7 @@ const ALL_CLASSES = [
   "2-1","2-2","2-3","2-4","2-5","2-6","2-7","2-8","2-9","2-10","2-11","2-12","2-13","2-14","2-15","2-16",
   "3-1","3-2","3-3","3-4","3-5","3-6","3-7","3-8","3-9","3-10","3-11","3-12","3-13","3-14","3-15","3-16"
 ];
+const CLASSES_1 = ["1-1","1-2","1-3","1-4","1-5","1-6","1-7","1-8","1-9","1-10","1-11","1-12","1-13","1-14","1-15","1-16"];
 const CLASSES_2 = ["2-1","2-2","2-3","2-4","2-5","2-6","2-7","2-8","2-9","2-10","2-11","2-12","2-13","2-14","2-15","2-16"];
 const CLASSES_3 = ["3-1","3-2","3-3","3-4","3-5","3-6","3-7","3-8","3-9","3-10","3-11","3-12","3-13","3-14","3-15","3-16"];
 const makeTeams = n => Array.from({length:n},(_,i)=>`${i+1}팀`);
@@ -409,6 +410,34 @@ const DEFAULT_WOD = {
   date:new Date().toISOString().slice(0,10)
 };
 function schoolKey(key){ return (S.selectedSchoolId||'wolchon')+'_'+key; }
+
+// 오디오/음성 함수
+let _audioCtx=null;
+function getAudioCtx(){
+  if(!_audioCtx||_audioCtx.state==='closed') _audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  if(_audioCtx.state==='suspended') _audioCtx.resume();
+  return _audioCtx;
+}
+function playBeep(freq=880,duration=0.1,volume=0.3){
+  try{
+    const ctx=getAudioCtx();
+    const osc=ctx.createOscillator();
+    const gain=ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value=freq; osc.type='sine';
+    gain.gain.setValueAtTime(volume,ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+duration);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime+duration);
+  }catch(e){}
+}
+function speak(text){
+  try{
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang='ko-KR'; u.rate=1.1; u.pitch=1; u.volume=1;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  }catch(e){}
+}
 function getWodForTeacher(tid){ const map=stor.get(schoolKey('wod_current_by_teacher'),{}); return map[tid]||{...DEFAULT_WOD}; }
 function setWodForTeacher(tid,wod){ const map=stor.get(schoolKey('wod_current_by_teacher'),{}); map[tid]=wod; stor.set(schoolKey('wod_current_by_teacher'),map); }
 function getWodList(tid){ return stor.get(schoolKey('wod_list_'+tid),[]); }
@@ -444,6 +473,8 @@ let S = {
   // 학교 선택
   selectedSchoolId: stor.get('selected_school_id', 'wolchon'),
   schoolAddMode: false, schoolAddName:'', schoolAddCode:'', schoolAddErr:'',
+  superAdminMode:false, superAdminInput:false, superAdminCode:'', superAdminErr:'',
+  superSchoolTab:null, superOpenTeacher:null,
   records: stor.get((stor.get('selected_school_id','wolchon'))+'_wod_records',[]),
   toast:null,
   // 로그인
@@ -465,7 +496,7 @@ let S = {
   fSets:0, fSetLogs:[], fCurExIdx:0, fExLog:[], fExCooldown:0,
   // ForTime (fChk 제거 - aChk1/aChk2로 통일)
   // EMOM
-  eTimeLeft:0, eRound:1, eRunning:false, eDone:false, eExIdx:0,
+  eTimeLeft:0, eRound:1, eRunning:false, eDone:false, eExIdx:0, eRestPhase:false, eRoundLogs:[],
   // saveRecord
   srSets:0, srReps:0, srTimeMin:0, srTimeSec:0,
   // rank
@@ -474,14 +505,14 @@ let S = {
   mrSearch:'',
   // admin
   // 체력측정
-  examPhase:'input', examName:'', examCls:'', examStartTime:null, examEndTime:null,
+  examPhase:'input', examName:'', examCls:'', examGrade:'2', examStartTime:null, examEndTime:null,
   examCurStep:0, examErr:'', examTotalSec:0, examResult:null, examRankCls:'전체',
   adminTab:'wod', adminWod:null, adminNewEx:'', adminWodEditId:null,
   adminWodSimId:null, adminTeamCls:'',
-  simData:null, simSlide:0, simPlaying:false,
+  simData:null, simSlide:0, simPlaying:false, simFromStudent:false,
   adminClearTarget:'all', adminConfirm:false,
-  adminFilterCls:'all', adminFilterMode:'all',
-  adminExpandRecord:null,
+  adminFilterCls:'all', adminFilterMode:'all', adminFilterGrade:'all',
+  adminExpandRecord:null, adminSelectedRecords:[],
   adminClassList:null, adminClassSaving:false, adminClassGrade:'2',
 };
 
@@ -1165,7 +1196,7 @@ function startCountdown(){
       clearInterval(cdInt);
       const wod=getActiveWod();
       const tl=wod.timeLimit||(wod.timeLimitMin||10)*60+(wod.timeLimitSec||0);
-      setState({wPhase:'working',aTimeLeft:tl,aSets:0,aRunning:true,aDone:false,aCheckLogs:[],aCooldown:0,aExCooldown:10,aCurExIdx:0,aExLog:[],fElapsed:0,fRunning:true,fDone:false,fSets:0,fSetLogs:[],fCurExIdx:0,fExLog:[],fExCooldown:10,eTimeLeft:60,eRound:1,eRunning:true,eDone:false,eExIdx:0});
+      setState({wPhase:'working',aTimeLeft:tl,aSets:0,aRunning:true,aDone:false,aCheckLogs:[],aCooldown:0,aExCooldown:10,aCurExIdx:0,aExLog:[],fElapsed:0,fRunning:true,fDone:false,fSets:0,fSetLogs:[],fCurExIdx:0,fExLog:[],fExCooldown:10,eTimeLeft:60,eRound:1,eRunning:true,eDone:false,eExIdx:0,eRestPhase:false,eRoundLogs:[]});
       startWorkTimer();
       return;
     }
@@ -1187,34 +1218,51 @@ function buildWorkoutCountdown(){
 
 function startWorkTimer(){
   clearInterval(workInt);
+  if('wakeLock' in navigator && !window._workWakeLock){
+    navigator.wakeLock.request('screen').then(lock=>{window._workWakeLock=lock;}).catch(()=>{});
+  }
   const wod=getActiveWod();
   if(wod.type==='AMRAP'){
     workInt=setInterval(()=>{
       if(S.aCooldown>0)S.aCooldown--;
       if(S.aExCooldown>0)S.aExCooldown--;
-      if(S.aTimeLeft<=1){ clearInterval(workInt); setState({aTimeLeft:0,aRunning:false,aDone:true}); return; }
-      S.aTimeLeft--; render();
-    },1000);
-  } else if(wod.type==='EMOM'){
-    // EMOM: 매 분(60초)마다 다음 운동으로
-    const exercises=wod.exercises||[];
-    const totalRounds=wod.emomRounds||exercises.length;
-    workInt=setInterval(()=>{
-      if(S.eTimeLeft<=1){
-        // 1분 종료
-        const nextEx=S.eExIdx+1;
-        if(nextEx>=totalRounds){
-          clearInterval(workInt);
-          setState({eTimeLeft:0,eRunning:false,eDone:true});
-          return;
-        }
-        S.eExIdx=nextEx;
-        S.eRound=nextEx+1;
-        S.eTimeLeft=60;
-        render();
+      if(S.aTimeLeft<=1){
+        clearInterval(workInt);
+        speak('운동 종료!');
+        if(window._workWakeLock){window._workWakeLock.release();window._workWakeLock=null;}
+        setState({aTimeLeft:0,aRunning:false,aDone:true});
         return;
       }
-      S.eTimeLeft--; render();
+      S.aTimeLeft--;
+      if(S.aTimeLeft===60) speak('1분 남았습니다!');
+      if(S.aTimeLeft===30) speak('30초 남았습니다!');
+      if(S.aTimeLeft<=10&&S.aTimeLeft>0){
+        if(S.aTimeLeft<=3) speak(String(S.aTimeLeft));
+        playBeep(S.aTimeLeft<=3?1200:880, S.aTimeLeft<=3?0.15:0.08, S.aTimeLeft<=3?0.5:0.3);
+      }
+      render();
+    },1000);
+  } else if(wod.type==='EMOM'){
+    const totalRounds=wod.emomRounds||3;
+    workInt=setInterval(()=>{
+      if(S.eTimeLeft<=1){
+        if(S.eRestPhase){
+          if(S.eRound>totalRounds){ clearInterval(workInt); speak('운동 종료!'); if(window._workWakeLock){window._workWakeLock.release();window._workWakeLock=null;} setState({eTimeLeft:0,eRunning:false,eDone:true,eRestPhase:false}); return; }
+          S.eRestPhase=false; S.eTimeLeft=60;
+        } else {
+          S.eRoundLogs=[...(S.eRoundLogs||[]),{round:S.eRound,time:60,auto:true}];
+          S.eRound++;
+          if(S.eRound>totalRounds){ clearInterval(workInt); speak('운동 종료!'); if(window._workWakeLock){window._workWakeLock.release();window._workWakeLock=null;} setState({eTimeLeft:0,eRunning:false,eDone:true,eRestPhase:false}); return; }
+          S.eTimeLeft=60;
+        }
+        render(); return;
+      }
+      S.eTimeLeft--;
+      if(!S.eRestPhase&&S.eTimeLeft<=10){
+        if(S.eTimeLeft<=3){ speak(String(S.eTimeLeft)); playBeep(1200,0.15,0.5); }
+        else playBeep(880,0.08,0.3);
+      }
+      render();
     },1000);
   } else {
     workInt=setInterval(()=>{
@@ -1465,6 +1513,8 @@ function buildForTime(){
         S.fExCooldown=10;
         if(S.fSets>=targetSets){
           clearInterval(workInt);
+          speak('운동 종료!');
+          if(window._workWakeLock){window._workWakeLock.release();window._workWakeLock=null;}
           S.fRunning=false;
           S.fDone=true;
         }
