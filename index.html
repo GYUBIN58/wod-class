@@ -78,6 +78,11 @@ window.fbDeleteExamRecord = async function(id) {
   }
 };
 
+// 교사 삭제
+window.fbDeleteTeacher = async function(id) {
+  try { await deleteDoc(doc(db, 'teachers', id)); } catch(e) { console.warn('교사 삭제 실패:',e); }
+};
+
 // 교사 계정 저장
 window.fbSaveTeacher = async function(teacher) {
   try {
@@ -363,6 +368,7 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 // 상수 & 스토리지
 // ═══════════════════════════════════════════
 const ALL_CLASSES = [
+  "1-1","1-2","1-3","1-4","1-5","1-6","1-7","1-8","1-9","1-10","1-11","1-12","1-13","1-14","1-15","1-16",
   "2-1","2-2","2-3","2-4","2-5","2-6","2-7","2-8","2-9","2-10","2-11","2-12","2-13","2-14","2-15","2-16",
   "3-1","3-2","3-3","3-4","3-5","3-6","3-7","3-8","3-9","3-10","3-11","3-12","3-13","3-14","3-15","3-16"
 ];
@@ -561,6 +567,7 @@ function getActiveWod(){
 function fbSaveRecord(rec){ window.fbSaveRecord && window.fbSaveRecord(rec); }
 function fbDeleteRecord(id){ window.fbDeleteRecord && window.fbDeleteRecord(id); }
 function fbSaveTeacher(t){ window.fbSaveTeacher && window.fbSaveTeacher(t); }
+function fbDeleteTeacher(id){ window.fbDeleteTeacher && window.fbDeleteTeacher(id); }
 function fbSaveWod(tid,wod){ window.fbSaveWod && window.fbSaveWod(tid,wod); }
 function fbSaveClasses(tid,cls){ window.fbSaveClasses && window.fbSaveClasses(tid,cls); }
 function fbSaveWodList(tid,list){ return window.fbSaveWodList ? window.fbSaveWodList(tid,list) : Promise.resolve(); }
@@ -3032,7 +3039,7 @@ function buildAdminTeams(){
 
   const clsRow=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:14px');
   myClasses.slice(0,16).forEach(cls=>{
-    clsRow.appendChild(mkBtn(`chip ${selCls===c?'on':''}`,`font-size:11px;padding:7px 2px`,c,()=>{S.adminTeamCls=cls;render();}));
+    clsRow.appendChild(mkBtn(`chip ${selCls===cls?'on':''}`,`font-size:11px;padding:7px 2px`,cls,()=>{S.adminTeamCls=cls;render();}));
   });
   wrap.appendChild(mkDiv('','font-size:11px;color:var(--muted);font-weight:700;margin-bottom:6px','반 선택'));
   wrap.appendChild(clsRow);
