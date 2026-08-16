@@ -943,7 +943,7 @@ function buildLogin(){
 
       wrap.appendChild(lbl('반 선택'));
       // 담당 반 있는 학년만 탭 표시
-      const availGrades=['1','2','3'].filter(g=>myClasses.some(c=>c.startsWith(g+'-')));
+      const availGrades=['1','2','3'].filter(g=>myClasses.some(cls=>cls.startsWith(g+'-')));
       if(availGrades.length===0){
         wrap.appendChild(mkDiv('card','text-align:center;color:var(--muted);padding:20px','담당 반이 설정되지 않았습니다.<br>선생님께 문의해주세요 😊'));
         wrap.appendChild(mkBtn('btn-s','margin-top:10px','← 뒤로',()=>setState({lStep:2,lErr:''})));
@@ -958,10 +958,10 @@ function buildLogin(){
         });
         wrap.appendChild(gradeTab);
       }
-      const gradeClasses=myClasses.filter(c=>c.startsWith((S.lGrade||availGrades[0])+'-'));
+      const gradeClasses=myClasses.filter(cls=>cls.startsWith((S.lGrade||availGrades[0])+'-'));
       const cg=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:12px');
-      gradeClasses.forEach(c=>{
-        cg.appendChild(mkBtn(`chip ${S.lCls===c?'on':''}`,`font-size:11px;padding:7px 2px`,c,()=>setState({lCls:c,lErr:''})));
+      gradeClasses.forEach(cls=>{
+        cg.appendChild(mkBtn(`chip ${S.lCls===cls?'on':''}`,`font-size:11px;padding:7px 2px`,cls,()=>setState({lCls:cls,lErr:''})));
       });
       wrap.appendChild(cg);
 
