@@ -1868,7 +1868,7 @@ function buildRankOnly(){
   sc.appendChild(mkDiv('','color:var(--muted);font-size:11px;font-weight:700;margin-bottom:7px','반 선택 (전체 또는 특정 반)'));
   const clsRow=mkDiv('','display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px');
   const allClasses=['전체',...[...new Set(recs.map(r=>r.class))].sort()];
-  allClasses.forEach(c=>{
+  allClasses.forEach(cls=>{
     clsRow.appendChild(mkBtn(`chip ${(S.rankOnlyCls||'전체')===c?'on':''}`,`font-size:11px;padding:6px 8px`,c,()=>{S.rankOnlyCls=c;render();}));
   });
   sc.appendChild(clsRow);
@@ -1956,7 +1956,7 @@ function buildExam(){
       sc.appendChild(mkDiv('','font-size:13px;font-weight:700;color:var(--muted);margin-bottom:8px;width:100%;max-width:400px','반 선택'));
 
       const cls2=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px;width:100%;max-width:400px');
-      ['2-1','2-2','2-3','2-4','2-5','2-6','2-7','2-8','2-9','2-10','2-11','2-12','2-13','2-14','2-15','2-16'].forEach(c=>{
+      ['2-1','2-2','2-3','2-4','2-5','2-6','2-7','2-8','2-9','2-10','2-11','2-12','2-13','2-14','2-15','2-16'].forEach(cls=>{
         const btn=mkBtn(`chip ${S.examCls===c?'on':''}`,`font-size:12px;padding:8px`,c,null);
         btn.addEventListener('click',()=>{
           S.examCls=c;
@@ -2094,7 +2094,7 @@ function buildExamRank(){
   // 반 필터
   const classes=[...new Set(recs.map(r=>r.cls))].sort();
   const filterRow=mkDiv('','display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px');
-  ['전체',...classes].forEach(c=>{
+  ['전체',...classes].forEach(cls=>{
     filterRow.appendChild(mkBtn(`chip ${(S.examRankCls||'전체')===c?'on':''}`,`font-size:11px;padding:6px 10px`,c,()=>{S.examRankCls=c;render();}));
   });
   sc.appendChild(filterRow);
@@ -3025,8 +3025,8 @@ function buildAdminTeams(){
   if(!S.adminTeamCls&&myClasses[0]) S.adminTeamCls=myClasses[0];
 
   const clsRow=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:14px');
-  myClasses.slice(0,16).forEach(c=>{
-    clsRow.appendChild(mkBtn(`chip ${selCls===c?'on':''}`,`font-size:11px;padding:7px 2px`,c,()=>{S.adminTeamCls=c;render();}));
+  myClasses.slice(0,16).forEach(cls=>{
+    clsRow.appendChild(mkBtn(`chip ${selCls===c?'on':''}`,`font-size:11px;padding:7px 2px`,c,()=>{S.adminTeamCls=cls;render();}));
   });
   wrap.appendChild(mkDiv('','font-size:11px;color:var(--muted);font-weight:700;margin-bottom:6px','반 선택'));
   wrap.appendChild(clsRow);
@@ -3112,7 +3112,7 @@ function buildAdminClasses(){
 
   const showClasses=(S.adminClassGrade||'2')==='2'?CLASSES_2:CLASSES_3;
   const grid=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:11px');
-  showClasses.forEach(c=>{
+  showClasses.forEach(cls=>{
     const on=(S.adminClassList||[]).includes(c);
     grid.appendChild(mkBtn(`chip ${on?'on':''}`,`font-size:11px;padding:8px 3px`,c,()=>{
       if(!S.adminClassList)S.adminClassList=[];
@@ -3134,7 +3134,7 @@ function buildAdminClasses(){
   }));
   row.appendChild(mkBtn('btn-s','flex:1;font-size:12px;padding:9px','이 학년 전체 해제',()=>{
     const grade=S.adminClassGrade||'2';
-    S.adminClassList=(S.adminClassList||[]).filter(c=>!c.startsWith(grade+'-'));
+    S.adminClassList=(S.adminClassList||[]).filter(cls=>!cls.startsWith(grade+'-'));
     render();
   }));
   info.appendChild(row);
@@ -3161,7 +3161,7 @@ function buildAdminRecords(){
   fc.innerHTML='<div style="font-weight:700;font-size:13px;margin-bottom:8px">🔍 필터</div>';
   fc.innerHTML+=`<div style="color:var(--muted);font-size:10px;margin-bottom:4px">반</div>`;
   const cg=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:7px');
-  [['all','전체'],...ALL_CLASSES.map(c=>[c,c])].forEach(([v,l])=>{
+  [['all','전체'],...ALL_CLASSES.map(cls=>[cls,cls])].forEach(([v,l])=>{
     cg.appendChild(mkBtn(`chip ${S.adminFilterCls===v?'on':''}`,`font-size:9px;padding:5px 1px`,l,()=>setState({adminFilterCls:v})));
   });
   fc.appendChild(cg);
@@ -3176,7 +3176,7 @@ function buildAdminRecords(){
   const cc=mkDiv('card','');
   cc.innerHTML='<div style="font-weight:700;font-size:12px;margin-bottom:8px">기록 초기화</div>';
   const targ=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:8px');
-  [['all','전체'],...ALL_CLASSES.map(c=>[c,c])].forEach(([v,l])=>{
+  [['all','전체'],...ALL_CLASSES.map(cls=>[cls,cls])].forEach(([v,l])=>{
     targ.appendChild(mkBtn(`chip ${S.adminClearTarget===v?'on':''}`,`font-size:9px;padding:4px 1px`,l,()=>setState({adminClearTarget:v,adminConfirm:false})));
   });
   cc.appendChild(targ);
