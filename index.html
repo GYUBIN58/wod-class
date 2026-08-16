@@ -908,9 +908,9 @@ function buildLogin(){
               <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">
                 <span class="badge bo">${w.type}</span>
                 <span class="badge ${isInd?'bg':'bb'}">${isInd?'🏃 개인전':'👥 팀전'}</span>
-                ${w.type==='AMRAP'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${fmtTime(tl)}</span>`:w.type==='EMOM'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${w.emomRounds||w.exercises.length}분</span>`:`<span class="badge" style="background:var(--card2);color:var(--muted)">${w.targetSets}세트</span>`}
+                ${w.type==='AMRAP'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${fmtTime(tl)}</span>`:w.type==='EMOM'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${w.emomRounds||3}라운드</span>`:`<span class="badge" style="background:var(--card2);color:var(--muted)">${w.targetSets}세트</span>`}
               </div>
-              <div>${w.exercises.map((ex,i)=>`<div style="font-size:11px;color:var(--muted);padding:1px 0">${i+1}. ${ex}</div>`).join('')}</div>
+              <div>${(w.exercises||[]).map((ex,i)=>`<div style="font-size:11px;color:var(--muted);padding:1px 0">${i+1}. ${ex}${(w.exerciseRx||[])[i]?" <span style=\"color:var(--blue);font-size:10px\">💪"+(w.exerciseRx||[])[i]+"</span>":""}</div>`).join('')}</div>
             </div>
             <button onclick="window._startSim('${wId}')" style="width:100%;margin-top:4px;padding:10px;background:var(--blue);color:white;border:none;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif">🎬 시뮬레이션 보기</button>`;
           wrap.appendChild(cardWrap);
@@ -942,18 +942,23 @@ function buildLogin(){
       wrap.appendChild(hdr);
 
       wrap.appendChild(lbl('반 선택'));
-      // 학년 탭
-      const gradeTab=mkDiv('','display:flex;gap:6px;margin-bottom:8px');
-      ['1학년','2학년','3학년'].forEach((g,gi)=>{
-        const gv=gi===0?'1':gi===1?'2':'3';
-        const isOn=(S.lGrade||'2')===gv;
-        gradeTab.appendChild(mkBtn(`chip ${isOn?'on':''}`,`flex:1;font-size:13px;padding:9px`,g,()=>setState({lGrade:gv,lCls:'',lErr:''})));
-      });
       // 담당 반 있는 학년만 탭 표시
       const availGrades=['1','2','3'].filter(g=>myClasses.some(c=>c.startsWith(g+'-')));
-      if(availGrades.length>0&&!availGrades.includes(S.lGrade||'2')) S.lGrade=availGrades[0];
-      wrap.appendChild(gradeTab);
-      const gradeClasses=myClasses.filter(c=>c.startsWith((S.lGrade||'2')+'-'));
+      if(availGrades.length===0){
+        wrap.appendChild(mkDiv('card','text-align:center;color:var(--muted);padding:20px','담당 반이 설정되지 않았습니다.<br>선생님께 문의해주세요 😊'));
+        wrap.appendChild(mkBtn('btn-s','margin-top:10px','← 뒤로',()=>setState({lStep:2,lErr:''})));
+        return wrap;
+      }
+      if(!availGrades.includes(S.lGrade||'1')) S.lGrade=availGrades[0];
+      if(availGrades.length>1){
+        const gradeTab=mkDiv('','display:flex;gap:6px;margin-bottom:8px');
+        availGrades.forEach(gv=>{
+          const isOn=(S.lGrade||availGrades[0])===gv;
+          gradeTab.appendChild(mkBtn(`chip ${isOn?'on':''}`,`flex:1;font-size:13px;padding:9px`,gv+'학년',()=>setState({lGrade:gv,lCls:'',lErr:''})));
+        });
+        wrap.appendChild(gradeTab);
+      }
+      const gradeClasses=myClasses.filter(c=>c.startsWith((S.lGrade||availGrades[0])+'-'));
       const cg=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:12px');
       gradeClasses.forEach(c=>{
         cg.appendChild(mkBtn(`chip ${S.lCls===c?'on':''}`,`font-size:11px;padding:7px 2px`,c,()=>setState({lCls:c,lErr:''})));
@@ -1136,11 +1141,11 @@ function doLogin(){
   if(!S.lCls){setState({lErr:'반을 선택해주세요'});return;}
   if(isInd){
     if(!S.lName.trim()){setState({lErr:'이름을 입력해주세요'});return;}
-    setState({user:{class:S.lCls,name:S.lName.trim(),team:'개인전',members:[S.lName.trim()],mode:'individual',teacherId:S.lTeacherId,selectedWodId:S.lWodId},screen:'main',tab:'home',lErr:''});
+    setState({user:{class:S.lCls,name:S.lName.trim(),team:'개인전',members:[S.lName.trim()],mode:'individual',teacherId:S.lTeacherId,selectedWodId:S.lWodId||'__default__'},screen:'main',tab:'home',lErr:''});
   } else {
     if(!S.lTeam){setState({lErr:'팀을 선택해주세요'});return;}
     if(S.lMembers.length===0){setState({lErr:'팀원을 최소 1명 입력해주세요'});return;}
-    setState({user:{class:S.lCls,team:S.lTeam,members:S.lMembers,mode:'team',teacherId:S.lTeacherId,selectedWodId:S.lWodId},screen:'main',tab:'home',lErr:''});
+    setState({user:{class:S.lCls,team:S.lTeam,members:S.lMembers,mode:'team',teacherId:S.lTeacherId,selectedWodId:S.lWodId||'__default__'},screen:'main',tab:'home',lErr:''});
   }
 }
 
@@ -1300,7 +1305,7 @@ function startCountdown(){
       clearInterval(cdInt);
       const wod=getActiveWod();
       const tl=wod.timeLimit||(wod.timeLimitMin||10)*60+(wod.timeLimitSec||0);
-      setState({wPhase:'working',aTimeLeft:tl,aSets:0,aRunning:true,aDone:false,aCheckLogs:[],aCooldown:0,aExCooldown:10,aCurExIdx:0,aExLog:[],fElapsed:0,fRunning:true,fDone:false,fSets:0,fSetLogs:[],fCurExIdx:0,fExLog:[],fExCooldown:10,eTimeLeft:60,eRound:1,eRunning:true,eDone:false,eExIdx:0,eRestPhase:false,eRoundLogs:[]});
+      setState({wPhase:'working',aTimeLeft:tl,aSets:0,aRunning:true,aDone:false,aCheckLogs:[],aCooldown:0,aExCooldown:0,aCurExIdx:0,aExLog:[],fElapsed:0,fRunning:true,fDone:false,fSets:0,fSetLogs:[],fCurExIdx:0,fExLog:[],fExCooldown:10,eTimeLeft:60,eRound:1,eRunning:true,eDone:false,eExIdx:0,eRestPhase:false,eRoundLogs:[]});
       startWorkTimer();
       return;
     }
@@ -1781,7 +1786,7 @@ function buildSaveRecord(){
   wrap.appendChild(chkCard);
 
   const saveBtn=mkBtn('btn-p','margin-top:auto',`💾 ${isInd?'기록 저장':'우리 팀 기록 저장'}`,doSaveRecord);
-  if(!S.aChk1||!S.aChk2)saveBtn.disabled=true;
+  if(isAmrap&&(!S.aChk1||!S.aChk2))saveBtn.disabled=true;
   wrap.appendChild(saveBtn);
   return wrap;
 }
