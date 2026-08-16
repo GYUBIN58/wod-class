@@ -1121,7 +1121,13 @@ function buildHome(){
   </div>
   <div style="background:var(--card2);border-radius:9px;padding:9px;margin-bottom:9px">
     ${wod.type==='AMRAP'?`<div style="color:var(--accent);font-weight:700;font-size:11px;margin-bottom:5px">⏱ ${fmtTime(tl)} AMRAP — 최대한 많이 반복!</div>`:wod.type==='EMOM'?`<div style="color:var(--green);font-weight:700;font-size:11px;margin-bottom:5px">🕐 ${wod.emomRounds||wod.exercises.length}분 EMOM — 매 분마다 새 운동!</div>`:`<div style="color:var(--blue);font-weight:700;font-size:11px;margin-bottom:5px">🎯 ${wod.targetSets}세트 For Time — 최대한 빠르게!</div>`}
-    ${wod.exercises.map((ex,i)=>`<div style="padding:3px 0;${i<wod.exercises.length-1?'border-bottom:1px solid var(--border)':''}display:flex;gap:5px;font-size:12px"><span style="color:var(--accent);font-weight:700;min-width:16px">${wod.type==='EMOM'?`${i+1}분:`:`${i+1}.`}</span>${ex}</div>`).join('')}
+    ${(wod.exercises||[]).map((ex,i)=>`<div style="padding:4px 0;${i<(wod.exercises||[]).length-1?'border-bottom:1px solid var(--border)':''}">
+      <div style="font-size:12px;font-weight:600"><span style="color:var(--accent)">${i+1}.</span> ${ex}</div>
+      <div style="display:flex;gap:6px;margin-top:1px;margin-left:14px">
+        ${(wod.exerciseRx||[])[i]?`<span style="font-size:10px;color:var(--blue);font-weight:700">💪${(wod.exerciseRx||[])[i]}</span>`:''}
+        ${(wod.exerciseScale||[])[i]?`<span style="font-size:10px;color:var(--green);font-weight:700">🔧${(wod.exerciseScale||[])[i]}</span>`:''}
+      </div>
+    </div>`).join('')}
   </div>`;
   if(myRec){
     wc.innerHTML+=`<div style="background:#22c55e15;border:1px solid #22c55e40;border-radius:9px;padding:9px;text-align:center">
@@ -1175,7 +1181,13 @@ function buildWorkoutReady(){
       ${wod.type==='AMRAP'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${fmtTime(tl)}</span>`:wod.type==='EMOM'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.emomRounds||wod.exercises.length}분</span>`:`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.targetSets}세트</span>`}
     </div>
     <div style="background:var(--card2);border-radius:9px;padding:9px 11px;font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">${typeDesc}</div>
-    ${wod.exercises.map((ex,i)=>`<div style="padding:6px 0;${i<wod.exercises.length-1?'border-bottom:1px solid var(--border)':''}display:flex;gap:6px;font-size:13px"><span style="color:var(--accent);font-weight:700">${wod.type==='EMOM'?`${i+1}분차:`:`${i+1}.`}</span>${ex}</div>`).join('')}`;
+    ${(wod.exercises||[]).map((ex,i)=>`<div style="padding:7px 0;${i<(wod.exercises||[]).length-1?'border-bottom:1px solid var(--border)':''}">
+      <div style="display:flex;gap:6px;font-size:13px;font-weight:600"><span style="color:var(--accent);font-weight:700;min-width:20px">${i+1}.</span>${ex}</div>
+      <div style="display:flex;gap:8px;margin-top:3px;margin-left:26px;flex-wrap:wrap">
+        ${(wod.exerciseRx||[])[i]?`<span style="font-size:11px;color:var(--blue);font-weight:700;background:#3b82f615;border-radius:6px;padding:2px 7px">💪 RxD: ${(wod.exerciseRx||[])[i]}</span>`:''}
+        ${(wod.exerciseScale||[])[i]?`<span style="font-size:11px;color:var(--green);font-weight:700;background:#10b98115;border-radius:6px;padding:2px 7px">🔧 Scale: ${(wod.exerciseScale||[])[i]}</span>`:''}
+      </div>
+    </div>`).join('')}`;
   if(!isInd)c.innerHTML+=`<div style="margin-top:8px;background:var(--card2);border-radius:7px;padding:6px 8px;font-size:11px;color:var(--muted)">👥 참여 팀원: ${S.user?.members?.join(', ')}</div>`;
   wrap.appendChild(c);
   // 시뮬레이션 버튼
@@ -2114,10 +2126,16 @@ function buildWodSim(){
         <div class="tf" style="font-size:22px;color:var(--accent);margin-bottom:8px">${slide.title}</div>
         <div style="font-size:13px;color:var(--muted);line-height:1.7">${slide.desc}</div>`;
     } else if(slide.type==='exercise'){
+      const rxStr=(wod.exerciseRx||[])[slide.exNum-1];
+      const scStr=(wod.exerciseScale||[])[slide.exNum-1];
       slideCard.innerHTML=`
         <div style="background:var(--asoft);border-radius:12px;padding:5px 12px;font-size:11px;color:var(--accent);font-weight:700;margin-bottom:10px">운동 ${slide.exNum} / ${exercises.length}</div>
         <div style="font-size:36px;margin-bottom:6px">${slide.emoji||'💪'}</div>
-        <div style="font-size:20px;font-weight:900;color:var(--accent);margin-bottom:12px">${slide.exName}</div>
+        <div style="font-size:20px;font-weight:900;color:var(--accent);margin-bottom:8px">${slide.exName}</div>
+        ${rxStr||scStr?`<div style="display:flex;gap:8px;justify-content:center;margin-bottom:10px;flex-wrap:wrap">
+          ${rxStr?`<span style="background:#3b82f620;color:var(--blue);border-radius:8px;padding:4px 12px;font-size:13px;font-weight:700">💪 RxD: ${rxStr}</span>`:''}
+          ${scStr?`<span style="background:#10b98120;color:var(--green);border-radius:8px;padding:4px 12px;font-size:13px;font-weight:700">🔧 Scale: ${scStr}</span>`:''}
+        </div>`:''}
         <div style="font-size:13px;color:var(--text);line-height:1.8;margin-bottom:10px;text-align:left;white-space:pre-line">${slide.desc}</div>
         <div style="background:var(--card2);border-radius:10px;padding:8px 14px;font-size:12px;color:var(--yellow)">${slide.tip||''}</div>`;
     } else if(slide.type==='transition'){
