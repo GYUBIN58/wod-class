@@ -1875,7 +1875,7 @@ function buildRankOnly(){
   const clsRow=mkDiv('','display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px');
   const allClasses=['전체',...[...new Set(recs.map(r=>r.class))].sort()];
   allClasses.forEach(cls=>{
-    clsRow.appendChild(mkBtn(`chip ${(S.rankOnlyCls||'전체')===c?'on':''}`,`font-size:11px;padding:6px 8px`,c,()=>{S.rankOnlyCls=c;render();}));
+    clsRow.appendChild(mkBtn(`chip ${(S.rankOnlyCls||'전체')===cls?'on':''}`,`font-size:11px;padding:6px 8px`,cls,()=>{S.rankOnlyCls=cls;render();}));
   });
   sc.appendChild(clsRow);
 
@@ -1963,9 +1963,9 @@ function buildExam(){
 
       const cls2=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px;width:100%;max-width:400px');
       ['2-1','2-2','2-3','2-4','2-5','2-6','2-7','2-8','2-9','2-10','2-11','2-12','2-13','2-14','2-15','2-16'].forEach(cls=>{
-        const btn=mkBtn(`chip ${S.examCls===c?'on':''}`,`font-size:12px;padding:8px`,c,null);
+        const btn=mkBtn(`chip ${S.examCls===cls?'on':''}`,`font-size:12px;padding:8px`,cls,null);
         btn.addEventListener('click',()=>{
-          S.examCls=c;
+          S.examCls=cls;
           // 반 버튼만 갱신 (re-render 없이)
           cls2.querySelectorAll('button').forEach(b=>b.classList.remove('on'));
           btn.classList.add('on');
@@ -2101,7 +2101,7 @@ function buildExamRank(){
   const classes=[...new Set(recs.map(r=>r.cls))].sort();
   const filterRow=mkDiv('','display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px');
   ['전체',...classes].forEach(cls=>{
-    filterRow.appendChild(mkBtn(`chip ${(S.examRankCls||'전체')===c?'on':''}`,`font-size:11px;padding:6px 10px`,c,()=>{S.examRankCls=c;render();}));
+    filterRow.appendChild(mkBtn(`chip ${(S.examRankCls||'전체')===cls?'on':''}`,`font-size:11px;padding:6px 10px`,cls,()=>{setState({examRankCls:cls});}));
   });
   sc.appendChild(filterRow);
 
@@ -3119,11 +3119,11 @@ function buildAdminClasses(){
   const showClasses=(S.adminClassGrade||'2')==='2'?CLASSES_2:CLASSES_3;
   const grid=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:11px');
   showClasses.forEach(cls=>{
-    const on=(S.adminClassList||[]).includes(c);
-    grid.appendChild(mkBtn(`chip ${on?'on':''}`,`font-size:11px;padding:8px 3px`,c,()=>{
+    const on=(S.adminClassList||[]).includes(cls);
+    grid.appendChild(mkBtn(`chip ${on?'on':''}`,`font-size:11px;padding:8px 3px`,cls,()=>{
       if(!S.adminClassList)S.adminClassList=[];
-      if(S.adminClassList.includes(c))S.adminClassList=S.adminClassList.filter(x=>x!==c);
-      else S.adminClassList=[...S.adminClassList,c];
+      if(S.adminClassList.includes(cls))S.adminClassList=S.adminClassList.filter(x=>x!==cls);
+      else S.adminClassList=[...S.adminClassList,cls];
       render();
     }));
   });
