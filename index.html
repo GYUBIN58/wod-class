@@ -409,6 +409,27 @@ const DEFAULT_WOD = {
   exercises:['50m 달리기','점프스쿼트 10회','버피 5회','파머스캐리 20m'],
   date:new Date().toISOString().slice(0,10)
 };
+function syncAdminWodInputs(){
+  if(!S.adminWod) return;
+  const titleInp=document.querySelector('#admin-wod-title');
+  if(titleInp) S.adminWod.title=titleInp.value;
+  const exInps=document.querySelectorAll('.admin-ex-inp');
+  if(exInps.length>0) S.adminWod.exercises=Array.from(exInps).map(i=>i.value||'');
+  const rxInps=document.querySelectorAll('.admin-ex-rx');
+  if(rxInps.length>0){ if(!S.adminWod.exerciseRx)S.adminWod.exerciseRx=[]; S.adminWod.exerciseRx=Array.from(rxInps).map(i=>i.value||''); }
+  const scInps=document.querySelectorAll('.admin-ex-scale');
+  if(scInps.length>0){ if(!S.adminWod.exerciseScale)S.adminWod.exerciseScale=[]; S.adminWod.exerciseScale=Array.from(scInps).map(i=>i.value||''); }
+  const minInp=document.querySelector('#admin-wod-min');
+  const secInp=document.querySelector('#admin-wod-sec');
+  if(minInp) S.adminWod.timeLimitMin=Math.max(0,+minInp.value);
+  if(secInp) S.adminWod.timeLimitSec=Math.min(59,Math.max(0,+secInp.value));
+  if(minInp||secInp) S.adminWod.timeLimit=(S.adminWod.timeLimitMin||0)*60+(S.adminWod.timeLimitSec||0);
+  const setsInp=document.querySelector('#admin-wod-sets');
+  if(setsInp) S.adminWod.targetSets=Math.max(1,+setsInp.value);
+  const roundsInp=document.querySelector('#admin-wod-rounds');
+  if(roundsInp) S.adminWod.emomRounds=Math.max(1,+roundsInp.value);
+}
+
 function schoolKey(key){ return (S.selectedSchoolId||'wolchon')+'_'+key; }
 
 // 오디오/음성 함수
