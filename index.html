@@ -1529,6 +1529,8 @@ function buildForTime(){
           if(window._workWakeLock){window._workWakeLock.release();window._workWakeLock=null;}
           S.fRunning=false;
           S.fDone=true;
+          S.srTimeMin=Math.floor(S.fElapsed/60);
+          S.srTimeSec=Math.floor(S.fElapsed)%60;
         }
         render();
       }:null);
@@ -1614,11 +1616,26 @@ function buildSaveRecord(){
       </div>
       <div style="display:flex;gap:6px;margin-bottom:8px"><div style="flex:1;text-align:center;color:var(--muted);font-size:10px">분</div><div style="width:14px"></div><div style="flex:1;text-align:center;color:var(--muted);font-size:10px">초</div></div>`;
     if(S.fSetLogs.length>0){
-      c.innerHTML+=`<div style="background:var(--card2);border-radius:7px;padding:6px 8px;font-size:10px;margin-top:4px">
-        <div style="font-weight:700;margin-bottom:2px">세트 로그 (${S.fSetLogs.length}/${wod.targetSets}세트)</div>
-        ${S.fSetLogs.map(l=>`<div style="color:var(--muted)">Set ${l.set} · ${fmtTime(l.elapsed)}</div>`).join('')}
-      </div>`;
-    }
+      const logsHtml=S.fSetLogs.map((l,i)=>{
+        const prevElapsed=i>0?S.fSetLogs[i-1].elapsed:0;
+        const setTime=l.elapsed-prevElapsed;
+        return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:${i<S.fSetLogs.length-1?'1px solid var(--border)':'none'}">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--asoft);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:var(--accent);flex-shrink:0">${l.set}</div>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:700;color:var(--text)">세트 소요: <span style="color:var(--blue)">${fmtTime(setTime)}</span></div>
+            <div style="font-size:10px;color:var(--muted)">누적: ${fmtTime(l.elapsed)}</div>
+          </div>
+        </div>`;
+      }).join('');
+      const totalTime=S.fSetLogs[S.fSetLogs.length-1]?.elapsed||0;
+      c.innerHTML+=`<div style="background:var(--card2);border-radius:10px;padding:10px;margin-top:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-weight:700;font-size:12px">세트별 기록 (${S.fSetLogs.length}/${wod.targetSets}세트)</div>
+          <div style="font-size:12px;font-weight:700;color:var(--green)">총 ${fmtTime(totalTime)}</div>
+        </div>
+        ${logsHtml}
+      </div>`;}
+
   }
   wrap.appendChild(c);
 
