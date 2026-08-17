@@ -2677,9 +2677,20 @@ function buildMyRecord(){
 function buildGrowth(){
   const wrap=mkDiv('','');
   const isInd=S.user?.mode==='individual';
-  const allMy=S.records.filter(r=>isInd?(r.name===S.user?.name&&r.class===S.user?.class):(r.team===S.user?.team&&r.class===S.user?.class)).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const myClass=S.user?.class;
+  const myTeacherId=S.user?.teacherId;
+
+  // 기록 필터: 팀전은 팀이름+반 기준, 개인전은 이름+반 기준
+  const allMy=S.records.filter(r=>{
+    if(r.teacherId!==myTeacherId) return false;
+    if(r.class!==myClass) return false;
+    if(isInd) return r.name===S.user?.name&&(r.mode==='individual'||!r.mode);
+    else return r.team===S.user?.team&&r.mode==='team';
+  }).sort((a,b)=>new Date(a.date)-new Date(b.date));
+
+  const label=isInd?S.user?.name:`${S.user?.class} ${S.user?.team}`;
   wrap.innerHTML=`<div class="tf" style="font-size:21px;margin-bottom:2px">📈 성장 그래프</div>
-    <div style="color:var(--muted);font-size:10px;margin-bottom:8px">${isInd?S.user?.name:S.user?.team}의 WOD별 기록</div>`;
+    <div style="color:var(--muted);font-size:10px;margin-bottom:8px">${label}의 WOD별 기록 추이</div>`;
 
   // 난이도 탭
   const hasDiff=allMy.some(r=>r.difficulty&&r.difficulty!=='rx');
@@ -2697,9 +2708,12 @@ function buildGrowth(){
     ?allMy.filter(r=>(r.difficulty||'rx')===S.growthDiff)
     :allMy;
 
-  if(my.length===0){wrap.innerHTML+='<div style="text-align:center;color:var(--muted);padding:32px"><div style="font-size:40px">📈</div><div style="margin-top:7px">기록이 쌓이면 표시됩니다!</div></div>';return wrap;}
+  if(my.length===0){
+    wrap.appendChild(mkDiv('','text-align:center;color:var(--muted);padding:32px',`<div style="font-size:40px">📈</div><div style="margin-top:7px">기록이 쌓이면 표시됩니다!</div><div style="font-size:11px;margin-top:4px">${isInd?'개인':'팀'} 기록을 저장하면 WOD별 성장 그래프가 나타납니다</div>`));
+    return wrap;
+  }
 
-  // WOD별 그룹핑
+  // WOD별 그룹핑 (같은 WOD만 비교)
   const wodGroups={};
   my.forEach(r=>{
     const key=r.wodTitle||'기타';
@@ -2709,91 +2723,146 @@ function buildGrowth(){
 
   Object.entries(wodGroups).forEach(([wodTitle,recs])=>{
     const wodType=recs[0].wodType;
-    const c=mkDiv('card','margin-bottom:12px;border:1px solid #f9731620');
+    const cardDiv=mkDiv('card','margin-bottom:12px;border:1px solid #f9731620');
+
+    const diffBadge=hasDiff?`<span style="font-size:9px;color:var(--muted);margin-left:4px">${[...new Set(recs.map(r=>r.difficulty==='scaled'?'🔧':r.difficulty==='basic'?'⭐':'💪'))].join('')}</span>`:'';
 
     if(wodType==='AMRAP'){
-      const maxS=Math.max(...recs.map(r=>r.sets));
-      c.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:2px">${wodTitle}</div>
-        <div style="display:flex;gap:4px;margin-bottom:8px"><span class="badge bo">AMRAP</span></div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">세트 수 변화</div>
-        <div style="display:flex;gap:4px;align-items:flex-end;height:68px">
-          ${recs.slice(-10).map(r=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
-            <div style="font-size:8px;color:var(--accent);font-weight:700">${r.sets}</div>
-            <div style="width:100%;border-radius:3px 3px 0 0;background:linear-gradient(var(--accent),#ea580c);height:${maxS>0?(r.sets/maxS)*55:3}px;min-height:3px"></div>
-            <div style="font-size:7px;color:var(--muted)">${fmtDate(r.date)}</div>
-          </div>`).join('')}
-        </div>
-        <div style="margin-top:8px;display:flex;gap:6px">
-          <div style="flex:1;background:var(--card2);border-radius:8px;padding:7px;text-align:center">
-            <div style="font-size:18px;font-weight:900;color:var(--accent)">${Math.max(...recs.map(r=>r.sets))}</div>
-            <div style="font-size:9px;color:var(--muted)">최고 세트</div>
+      const maxS=Math.max(...recs.map(r=>r.sets||0));
+      const avgS=Math.round(recs.reduce((a,b)=>a+(b.sets||0),0)/recs.length);
+      const best=Math.max(...recs.map(r=>r.sets||0));
+      const latest=recs[recs.length-1];
+      const trend=recs.length>1?(latest.sets||0)-(recs[0].sets||0):0;
+      cardDiv.innerHTML=`
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div>
+            <div style="font-weight:700;font-size:13px">${wodTitle}${diffBadge}</div>
+            <div style="display:flex;gap:4px;margin-top:2px"><span class="badge bo">AMRAP</span><span style="font-size:10px;color:var(--muted);line-height:1.8">${recs.length}회 기록</span></div>
           </div>
-          <div style="flex:1;background:var(--card2);border-radius:8px;padding:7px;text-align:center">
-            <div style="font-size:18px;font-weight:900;color:var(--green)">${recs.length}</div>
-            <div style="font-size:9px;color:var(--muted)">총 횟수</div>
+          <div style="text-align:right">
+            <div style="font-size:10px;color:var(--muted)">최고</div>
+            <div style="font-size:20px;font-weight:900;color:var(--accent)">${best}S</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:4px;align-items:flex-end;height:72px;margin-bottom:6px">
+          ${recs.slice(-10).map((r,i,arr)=>{
+            const prev=i>0?arr[i-1].sets||0:null;
+            const cur=r.sets||0;
+            const color=prev===null?'var(--accent)':cur>prev?'var(--green)':cur<prev?'var(--red)':'var(--accent)';
+            return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
+              <div style="font-size:8px;color:${color};font-weight:700">${cur}S</div>
+              <div style="width:100%;border-radius:3px 3px 0 0;background:${color};height:${maxS>0?(cur/maxS)*58:3}px;min-height:3px;opacity:.85"></div>
+              <div style="font-size:7px;color:var(--muted);text-align:center">${fmtDate(r.date)}</div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px">
+          <div style="background:var(--card2);border-radius:7px;padding:6px;text-align:center">
+            <div style="font-size:14px;font-weight:900;color:var(--accent)">${best}S</div>
+            <div style="font-size:8px;color:var(--muted)">최고</div>
+          </div>
+          <div style="background:var(--card2);border-radius:7px;padding:6px;text-align:center">
+            <div style="font-size:14px;font-weight:900;color:var(--muted)">${avgS}S</div>
+            <div style="font-size:8px;color:var(--muted)">평균</div>
+          </div>
+          <div style="background:var(--card2);border-radius:7px;padding:6px;text-align:center">
+            <div style="font-size:14px;font-weight:900;color:${trend>0?'var(--green)':trend<0?'var(--red)':'var(--muted)'}">${trend>0?'+':''}${trend}S</div>
+            <div style="font-size:8px;color:var(--muted)">첫→최근</div>
           </div>
         </div>`;
     } else if(wodType==='EMOM'){
       const maxR=Math.max(...recs.map(r=>r.sets||0));
-      c.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:2px">${wodTitle}</div>
-        <div style="display:flex;gap:4px;margin-bottom:8px"><span class="badge bg">EMOM</span></div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">완료 라운드 변화</div>
-        <div style="display:flex;gap:4px;align-items:flex-end;height:68px">
-          ${recs.slice(-10).map(r=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
-            <div style="font-size:8px;color:var(--green);font-weight:700">${r.sets||0}R</div>
-            <div style="width:100%;border-radius:3px 3px 0 0;background:linear-gradient(var(--green),#16a34a);height:${maxR>0?((r.sets||0)/maxR)*55:3}px;min-height:3px"></div>
-            <div style="font-size:7px;color:var(--muted)">${fmtDate(r.date)}</div>
-          </div>`).join('')}
-        </div>
-        <div style="margin-top:8px;display:flex;gap:6px">
-          <div style="flex:1;background:var(--card2);border-radius:8px;padding:7px;text-align:center">
-            <div style="font-size:18px;font-weight:900;color:var(--green)">${maxR}R</div>
-            <div style="font-size:9px;color:var(--muted)">최고 라운드</div>
+      const avgR=Math.round(recs.reduce((a,b)=>a+(b.sets||0),0)/recs.length);
+      const best=maxR;
+      const latest=recs[recs.length-1];
+      const trend=recs.length>1?(latest.sets||0)-(recs[0].sets||0):0;
+      cardDiv.innerHTML=`
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div>
+            <div style="font-weight:700;font-size:13px">${wodTitle}${diffBadge}</div>
+            <div style="display:flex;gap:4px;margin-top:2px"><span class="badge bg">EMOM</span><span style="font-size:10px;color:var(--muted);line-height:1.8">${recs.length}회 기록</span></div>
           </div>
-          <div style="flex:1;background:var(--card2);border-radius:8px;padding:7px;text-align:center">
-            <div style="font-size:18px;font-weight:900;color:var(--green)">${recs.length}</div>
-            <div style="font-size:9px;color:var(--muted)">총 횟수</div>
+          <div style="text-align:right">
+            <div style="font-size:10px;color:var(--muted)">최고</div>
+            <div style="font-size:20px;font-weight:900;color:var(--green)">${best}R</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:4px;align-items:flex-end;height:72px;margin-bottom:6px">
+          ${recs.slice(-10).map((r,i,arr)=>{
+            const prev=i>0?arr[i-1].sets||0:null;
+            const cur=r.sets||0;
+            const color=prev===null?'var(--green)':cur>prev?'var(--green)':cur<prev?'var(--red)':'var(--green)';
+            return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
+              <div style="font-size:8px;color:${color};font-weight:700">${cur}R</div>
+              <div style="width:100%;border-radius:3px 3px 0 0;background:${color};height:${maxR>0?(cur/maxR)*58:3}px;min-height:3px;opacity:.85"></div>
+              <div style="font-size:7px;color:var(--muted);text-align:center">${fmtDate(r.date)}</div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px">
+          <div style="background:var(--card2);border-radius:7px;padding:6px;text-align:center">
+            <div style="font-size:14px;font-weight:900;color:var(--green)">${best}R</div>
+            <div style="font-size:8px;color:var(--muted)">최고</div>
+          </div>
+          <div style="background:var(--card2);border-radius:7px;padding:6px;text-align:center">
+            <div style="font-size:14px;font-weight:900;color:var(--muted)">${avgR}R</div>
+            <div style="font-size:8px;color:var(--muted)">평균</div>
+          </div>
+          <div style="background:var(--card2);border-radius:7px;padding:6px;text-align:center">
+            <div style="font-size:14px;font-weight:900;color:${trend>0?'var(--green)':trend<0?'var(--red)':'var(--muted)'}">${trend>0?'+':''}${trend}R</div>
+            <div style="font-size:8px;color:var(--muted)">첫→최근</div>
           </div>
         </div>`;
     } else {
-      const maxT=Math.max(...recs.map(r=>r.time));
-      const minT=Math.min(...recs.map(r=>r.time));
-      c.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:2px">${wodTitle}</div>
-        <div style="display:flex;gap:4px;margin-bottom:8px"><span class="badge bb">${wodType}</span></div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">완료 시간 변화 (낮을수록 빠름)</div>
-        <div style="display:flex;gap:4px;align-items:flex-end;height:68px">
-          ${recs.slice(-10).map(r=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
-            <div style="font-size:7px;color:var(--blue);font-weight:700">${fmtTime(r.time)}</div>
-            <div style="width:100%;border-radius:3px 3px 0 0;background:linear-gradient(var(--blue),#2563eb);height:${maxT>0?(r.time/maxT)*55:3}px;min-height:3px"></div>
-            <div style="font-size:7px;color:var(--muted)">${fmtDate(r.date)}</div>
-          </div>`).join('')}
-        </div>
-        <div style="margin-top:8px;display:flex;gap:6px">
-          <div style="flex:1;background:var(--card2);border-radius:8px;padding:7px;text-align:center">
-            <div style="font-size:15px;font-weight:900;color:var(--blue)">${fmtTime(minT)}</div>
-            <div style="font-size:9px;color:var(--muted)">최고 기록</div>
+      // ForTime - 시간이 짧을수록 좋음
+      const minT=Math.min(...recs.map(r=>r.time||99999));
+      const avgT=Math.round(recs.reduce((a,b)=>a+(b.time||0),0)/recs.length);
+      const maxT=Math.max(...recs.map(r=>r.time||0));
+      const latest=recs[recs.length-1];
+      const trend=recs.length>1?(recs[0].time||0)-(latest.time||0):0; // 양수면 개선
+      cardDiv.innerHTML=`
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div>
+            <div style="font-weight:700;font-size:13px">${wodTitle}${diffBadge}</div>
+            <div style="display:flex;gap:4px;margin-top:2px"><span class="badge bb">ForTime</span><span style="font-size:10px;color:var(--muted);line-height:1.8">${recs.length}회 기록</span></div>
           </div>
-          <div style="flex:1;background:var(--card2);border-radius:8px;padding:7px;text-align:center">
-            <div style="font-size:18px;font-weight:900;color:var(--green)">${recs.length}</div>
-            <div style="font-size:9px;color:var(--muted)">총 횟수</div>
+          <div style="text-align:right">
+            <div style="font-size:10px;color:var(--muted)">최고</div>
+            <div style="font-size:18px;font-weight:900;color:var(--blue)">${fmtTime(minT)}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:4px;align-items:flex-end;height:72px;margin-bottom:6px">
+          ${recs.slice(-10).map((r,i,arr)=>{
+            const prev=i>0?arr[i-1].time||0:null;
+            const cur=r.time||0;
+            const color=prev===null?'var(--blue)':cur<prev?'var(--green)':cur>prev?'var(--red)':'var(--blue)';
+            const h=maxT>0?((maxT-cur)/maxT)*55+8:8;
+            return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
+              <div style="font-size:7px;color:${color};font-weight:700">${fmtTime(cur)}</div>
+              <div style="width:100%;border-radius:3px 3px 0 0;background:${color};height:${h}px;min-height:3px;opacity:.85"></div>
+              <div style="font-size:7px;color:var(--muted);text-align:center">${fmtDate(r.date)}</div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px">
+          <div style="background:var(--card2);border-radius:7px;padding:6px;text-align:center">
+            <div style="font-size:12px;font-weight:900;color:var(--blue)">${fmtTime(minT)}</div>
+            <div style="font-size:8px;color:var(--muted)">최고기록</div>
+          </div>
+          <div style="background:var(--card2);border-radius:7px;padding:6px;text-align:center">
+            <div style="font-size:12px;font-weight:900;color:var(--muted)">${fmtTime(avgT)}</div>
+            <div style="font-size:8px;color:var(--muted)">평균</div>
+          </div>
+          <div style="background:var(--card2);border-radius:7px;padding:6px;text-align:center">
+            <div style="font-size:12px;font-weight:900;color:${trend>0?'var(--green)':trend<0?'var(--red)':'var(--muted)'}">${trend>0?'-'+fmtTime(Math.abs(trend)):trend<0?'+'+fmtTime(Math.abs(trend)):'±0'}</div>
+            <div style="font-size:8px;color:var(--muted)">첫→최근</div>
           </div>
         </div>`;
     }
-    wrap.appendChild(c);
+    wrap.appendChild(cardDiv);
   });
-
-  // 전체 요약
-  wrap.appendChild(mkDiv('card','',`<div style="font-weight:700;font-size:12px;margin-bottom:6px">📊 전체 요약</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-      <div style="background:var(--card2);border-radius:8px;padding:8px;text-align:center"><div style="font-size:20px;font-weight:900;color:var(--accent)">${my.length}</div><div style="color:var(--muted);font-size:10px">총 운동 횟수</div></div>
-      <div style="background:var(--card2);border-radius:8px;padding:8px;text-align:center"><div style="font-size:20px;font-weight:900;color:var(--green)">${Object.keys(wodGroups).length}</div><div style="color:var(--muted);font-size:10px">참여 WOD 수</div></div>
-    </div>`));
   return wrap;
 }
-
-// ═══════════════════════════════════════════
-// ADMIN
-// ═══════════════════════════════════════════
 function buildAdmin(){
   // 편집 중이 아닐 때만 기본 WOD로 초기화 (편집 중엔 절대 덮어쓰지 않음)
   if(!S.adminWodEditId && !S.adminWod) S.adminWod={...getWodForTeacher(S.user?.teacherId)};
