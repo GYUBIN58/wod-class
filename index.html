@@ -529,7 +529,7 @@ let S = {
   // saveRecord
   srSets:0, srReps:0, srTimeMin:0, srTimeSec:0,
   // rank
-  rankView:'class', rankOnlyTeacherId:'', rankOnlyCls:'전체', rankOnlyDiff:'all',
+  rankView:'class', rankOnlyTeacherId:'', rankOnlyCls:'전체', rankOnlyDiff:'all', growthDiff:'all',
   // myRecord
   mrSearch:'',
   // admin
@@ -2658,9 +2658,26 @@ function buildMyRecord(){
 function buildGrowth(){
   const wrap=mkDiv('','');
   const isInd=S.user?.mode==='individual';
-  const my=S.records.filter(r=>isInd?(r.name===S.user?.name&&r.class===S.user?.class):(r.team===S.user?.team&&r.class===S.user?.class)).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const allMy=S.records.filter(r=>isInd?(r.name===S.user?.name&&r.class===S.user?.class):(r.team===S.user?.team&&r.class===S.user?.class)).sort((a,b)=>new Date(a.date)-new Date(b.date));
   wrap.innerHTML=`<div class="tf" style="font-size:21px;margin-bottom:2px">📈 성장 그래프</div>
-    <div style="color:var(--muted);font-size:10px;margin-bottom:12px">${isInd?S.user?.name:S.user?.team}의 WOD별 기록</div>`;
+    <div style="color:var(--muted);font-size:10px;margin-bottom:8px">${isInd?S.user?.name:S.user?.team}의 WOD별 기록</div>`;
+
+  // 난이도 탭
+  const hasDiff=allMy.some(r=>r.difficulty&&r.difficulty!=='rx');
+  if(hasDiff){
+    const diffTab=mkDiv('','display:flex;gap:5px;margin-bottom:10px');
+    [['all','전체'],['rx','💪 RxD'],['scaled','🔧 Scaled'],['basic','⭐ Basic']].forEach(([v,l])=>{
+      const cnt=v==='all'?allMy.length:allMy.filter(r=>(r.difficulty||'rx')===v).length;
+      if(cnt===0&&v!=='all') return;
+      diffTab.appendChild(mkBtn(`chip ${(S.growthDiff||'all')===v?'on':''}`,`flex:1;font-size:11px`,l,()=>{S.growthDiff=v;render();}));
+    });
+    wrap.appendChild(diffTab);
+  }
+
+  const my=S.growthDiff&&S.growthDiff!=='all'
+    ?allMy.filter(r=>(r.difficulty||'rx')===S.growthDiff)
+    :allMy;
+
   if(my.length===0){wrap.innerHTML+='<div style="text-align:center;color:var(--muted);padding:32px"><div style="font-size:40px">📈</div><div style="margin-top:7px">기록이 쌓이면 표시됩니다!</div></div>';return wrap;}
 
   // WOD별 그룹핑
@@ -3298,8 +3315,11 @@ function buildAdminRecords(){
         <div style="font-size:12px;font-weight:700">${r.class} · ${r.mode==='team'?r.team:r.name||getMembers(r)[0]||''}</div>
         <div style="font-size:10px;color:var(--muted)">${getMembers(r).join(', ')||''} · ${r.wodTitle||''}</div>
       </div>
-      <div style="font-size:14px;font-weight:900;color:${r.wodType==='AMRAP'?'var(--accent)':r.wodType==='EMOM'?'var(--green)':'var(--blue)'}">${r.wodType==='AMRAP'?`${r.sets||0}S+${r.reps||0}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time)}</div>
-      ${hasAbn?'<span style="color:var(--red);font-size:11px">⚠️</span>':''}
+      <div style="text-align:right">
+        <div style="font-size:14px;font-weight:900;color:${r.wodType==='AMRAP'?'var(--accent)':r.wodType==='EMOM'?'var(--green)':'var(--blue)'}">${r.wodType==='AMRAP'?`${r.sets||0}S+${r.reps||0}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time)}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:1px">${r.difficulty==='scaled'?'🔧Scaled':r.difficulty==='basic'?'⭐Basic':'💪RxD'}</div>
+        ${hasAbn?'<span style="color:var(--red);font-size:11px">⚠️</span>':''}
+      </div>
     </div>
     <div style="font-size:9px;color:var(--muted)">${fmtFull(r.date)}</div>`;
     const detBtn=mkBtn('','background:none;border:none;color:var(--muted);font-size:9px;margin-top:2px',expanded?'▲ 접기':'▼ 상세',()=>setState({adminExpandRecord:expanded?null:r.id}));
