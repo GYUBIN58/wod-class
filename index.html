@@ -1616,16 +1616,51 @@ function buildEmom(){
   if(S.eDone){
     const completedRounds=S.eRound-1;
     const logs=S.eRoundLogs||[];
-    const avgTime=logs.length>0?Math.round(logs.reduce((a,b)=>a+b.time,0)/logs.length):0;
+    const manualLogs=logs.filter(l=>!l.auto);
+    const avgTime=manualLogs.length>0?Math.round(manualLogs.reduce((a,b)=>a+b.time,0)/manualLogs.length):0;
+    const avgRest=avgTime>0?60-avgTime:0;
+
     wrap.innerHTML=`<div class="tf" style="font-size:28px;color:var(--accent);text-align:center;margin-top:24px;margin-bottom:6px">🎉 완료!</div>
       <div style="font-size:16px;font-weight:700;text-align:center;margin-bottom:4px;color:var(--muted)">${totalRounds}라운드 EMOM</div>
       <div style="text-align:center;color:var(--muted);font-size:13px;margin-bottom:16px">${completedRounds}라운드 완료 💪</div>`;
+
+    // 평균 통계
     if(avgTime>0){
-      const statsRow=mkDiv('','display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px');
-      statsRow.innerHTML=`<div class="card" style="text-align:center"><div style="font-size:26px;font-weight:900;color:var(--green)">${avgTime}초</div><div style="font-size:11px;color:var(--muted)">평균 소요</div></div>
-        <div class="card" style="text-align:center"><div style="font-size:26px;font-weight:900;color:var(--blue)">${60-avgTime}초</div><div style="font-size:11px;color:var(--muted)">평균 휴식</div></div>`;
+      const statsRow=mkDiv('','display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px');
+      statsRow.innerHTML=`
+        <div class="card" style="text-align:center">
+          <div style="font-size:26px;font-weight:900;color:var(--green)">${avgTime}초</div>
+          <div style="font-size:11px;color:var(--muted)">평균 운동시간</div>
+        </div>
+        <div class="card" style="text-align:center">
+          <div style="font-size:26px;font-weight:900;color:var(--blue)">${avgRest}초</div>
+          <div style="font-size:11px;color:var(--muted)">평균 휴식시간</div>
+        </div>`;
       wrap.appendChild(statsRow);
     }
+
+    // 라운드별 기록
+    if(logs.length>0){
+      const logCard=mkDiv('card','margin-bottom:12px');
+      logCard.appendChild(mkDiv('','font-size:12px;font-weight:700;margin-bottom:8px','📋 라운드별 기록'));
+      logs.forEach(l=>{
+        const restSec=l.auto?0:60-l.time;
+        const row=mkDiv('','display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)');
+        row.innerHTML=`
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--asoft);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:var(--accent);flex-shrink:0">${l.round}</div>
+          <div style="flex:1">
+            ${l.auto
+              ?`<span style="font-size:12px;color:var(--muted)">⏰ 시간 초과 (완료버튼 미클릭)</span>`
+              :`<span style="font-size:12px;font-weight:700;color:var(--green)">운동 ${l.time}초</span>
+                <span style="font-size:11px;color:var(--blue);margin-left:8px">휴식 ${restSec}초</span>`
+            }
+          </div>
+          ${!l.auto?`<div style="font-size:10px;color:var(--muted)">${l.time<30?'🔥빠름':l.time<45?'👍보통':'🐢느림'}</div>`:''}`;
+        logCard.appendChild(row);
+      });
+      wrap.appendChild(logCard);
+    }
+
     wrap.appendChild(mkBtn('btn-p','','기록 저장하기 →',()=>{ clearInterval(workInt); setState({screen:'saveRecord',srSets:completedRounds,srReps:0,srTimeMin:0,srTimeSec:0,aChk1:false,aChk2:false,srDifficulty:'rx'}); }));
     return wrap;
   }
@@ -3272,12 +3307,17 @@ function buildAdminWodForm(){
     wrap.appendChild(c4);
   } else if(aw.type==='EMOM'){
     const c4=mkDiv('card','');
-    c4.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:7px">총 라운드 수 (분)</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:9px">운동 목록이 ${aw.exercises?.length||0}개면 자동으로 ${aw.exercises?.length||0}분 EMOM이 됩니다. 더 길게 하려면 늘려주세요.</div>`;
-    const ri=mkInp('inp',{type:'number',value:aw.emomRounds||aw.exercises?.length||3},v=>{S.adminWod.emomRounds=Math.max(1,+v);});
-    ri.style.cssText='font-size:28px;font-weight:900;text-align:center';
+    c4.appendChild(mkDiv('','font-weight:700;font-size:13px;margin-bottom:7px','총 라운드 수'));
+    c4.appendChild(mkDiv('','font-size:11px;color:var(--muted);margin-bottom:9px',`운동 목록이 ${aw.exercises?.length||0}개면 자동으로 ${aw.exercises?.length||0}라운드 EMOM이 됩니다. 더 길게 하려면 늘려주세요.`));
+    const ri=document.createElement('input');
+    ri.id='admin-wod-rounds';
+    ri.type='number'; ri.min='1'; ri.max='99';
+    ri.value=aw.emomRounds||aw.exercises?.length||3;
+    ri.className='inp';
+    ri.style.cssText='font-size:28px;font-weight:900;text-align:center;width:100%';
+    ri.addEventListener('input',v=>{S.adminWod.emomRounds=Math.max(1,+ri.value);render();});
     c4.appendChild(ri);
-    c4.innerHTML+=`<div style="margin-top:8px;text-align:center;color:var(--accent);font-size:13px;font-weight:700">= ${aw.emomRounds||aw.exercises?.length||3}분 EMOM</div>`;
+    c4.appendChild(mkDiv('','margin-top:8px;text-align:center;color:var(--accent);font-size:13px;font-weight:700',`= ${aw.emomRounds||aw.exercises?.length||3}라운드 EMOM`));
     wrap.appendChild(c4);
   } else {
     const c4=mkDiv('card','');
