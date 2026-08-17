@@ -529,7 +529,7 @@ let S = {
   // saveRecord
   srSets:0, srReps:0, srTimeMin:0, srTimeSec:0,
   // rank
-  rankView:'class', rankOnlyTeacherId:'', rankOnlyCls:'전체', rankOnlyDiff:'all', growthDiff:'all',
+  rankView:'class', rankOnlyTeacherId:'', rankOnlyCls:'전체', rankOnlyDiff:'all', rankDiff:'all', growthDiff:'all',
   // myRecord
   mrSearch:'',
   // admin
@@ -1233,8 +1233,8 @@ function buildHome(){
   const tl=wod.timeLimit||(wod.timeLimitMin||10)*60+(wod.timeLimitSec||0);
 
   let myRec=isInd
-    ?clsRecs.find(r=>r.name===S.user?.name&&r.wodType===wod.type)
-    :clsRecs.find(r=>r.team===S.user?.team&&r.mode==='team'&&r.wodType===wod.type);
+    ?clsRecs.find(r=>r.name===S.user?.name&&r.wodType===wod.type&&(r.wodTitle===wod.title||!r.wodTitle))
+    :clsRecs.find(r=>r.team===S.user?.team&&r.mode==='team'&&r.wodType===wod.type&&(r.wodTitle===wod.title||!r.wodTitle));
   let topRec=null;
   if(wod.type==='AMRAP'&&clsRecs.length>0)topRec=clsRecs.reduce((a,b)=>a.sets>b.sets||(a.sets===b.sets&&a.reps>b.reps)?a:b);
   else if(wod.type==='EMOM'&&clsRecs.length>0)topRec=clsRecs.reduce((a,b)=>(a.sets||0)>=(b.sets||0)?a:b);
@@ -1247,7 +1247,7 @@ function buildHome(){
     <span class="badge ${wod.type==='AMRAP'?'bo':wod.type==='EMOM'?'bg':'bb'}">${wod.type}</span>
   </div>
   <div style="background:var(--card2);border-radius:9px;padding:9px;margin-bottom:9px">
-    ${wod.type==='AMRAP'?`<div style="color:var(--accent);font-weight:700;font-size:11px;margin-bottom:5px">⏱ ${fmtTime(tl)} AMRAP — 최대한 많이 반복!</div>`:wod.type==='EMOM'?`<div style="color:var(--green);font-weight:700;font-size:11px;margin-bottom:5px">🕐 ${wod.emomRounds||wod.exercises.length}분 EMOM — 매 분마다 새 운동!</div>`:`<div style="color:var(--blue);font-weight:700;font-size:11px;margin-bottom:5px">🎯 ${wod.targetSets}세트 For Time — 최대한 빠르게!</div>`}
+    ${wod.type==='AMRAP'?`<div style="color:var(--accent);font-weight:700;font-size:11px;margin-bottom:5px">⏱ ${fmtTime(tl)} AMRAP — 최대한 많이 반복!</div>`:wod.type==='EMOM'?`<div style="color:var(--green);font-weight:700;font-size:11px;margin-bottom:5px">🕐 ${wod.emomRounds||3}라운드 EMOM — 완료 후 남은 시간 휴식!</div>`:`<div style="color:var(--blue);font-weight:700;font-size:11px;margin-bottom:5px">🎯 ${wod.targetSets}세트 For Time — 최대한 빠르게!</div>`}
     ${(wod.exercises||[]).map((ex,i)=>`<div style="padding:4px 0;${i<(wod.exercises||[]).length-1?'border-bottom:1px solid var(--border)':''}">
       <div style="font-size:12px;font-weight:600"><span style="color:var(--accent)">${i+1}.</span> ${ex}</div>
       <div style="display:flex;gap:6px;margin-top:1px;margin-left:14px;flex-wrap:wrap">
@@ -1264,7 +1264,7 @@ function buildHome(){
     </div>`;
   } else {
     wc.appendChild(mkBtn('btn-p','margin-top:3px',isInd?'운동 시작하기 🔥':'우리 팀 운동 시작하기 🔥',
-      ()=>setState({screen:'workout',wPhase:'ready',wCountdown:10,aCurExIdx:0,aExLog:[],fCurExIdx:0,fExLog:[],fSets:0,fSetLogs:[],fDone:false,eExIdx:0,eRound:1,eDone:false,eTimeLeft:60})));
+      ()=>setState({screen:'workout',wPhase:'ready',wCountdown:10,aCurExIdx:0,aExLog:[],fCurExIdx:0,fExLog:[],fSets:0,fSetLogs:[],fDone:false,eExIdx:0,eRound:1,eDone:false,eTimeLeft:60,eRestPhase:false,eRoundLogs:[]})));
   }
   wrap.appendChild(wc);
 
@@ -1301,12 +1301,12 @@ function buildWorkoutReady(){
   const typeDesc=wod.type==='AMRAP'
     ?`⏱ <b>${fmtTime(tl)}</b> 동안 아래 운동을 최대한 많이 반복해요!`
     :wod.type==='EMOM'
-    ?`🕐 매 분마다 새 운동! <b>${wod.emomRounds||wod.exercises.length}분</b> 동안 총 ${wod.exercises.length}가지 운동을 순서대로 합니다.`
+    ?`🕐 아래 운동들을 1분 안에 완료 → 남은 시간 휴식! <b>${wod.emomRounds||3}라운드</b> 반복합니다.`
     :`🎯 아래 운동을 <b>${wod.targetSets}세트</b> 최대한 빠르게 완료해요!`;
   c.innerHTML=`<div class="tf" style="font-size:18px;margin-bottom:4px">${wod.title}</div>
     <div style="display:flex;gap:5px;margin-bottom:8px">
       <span class="badge ${typeColor}">${wod.type}</span>
-      ${wod.type==='AMRAP'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${fmtTime(tl)}</span>`:wod.type==='EMOM'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.emomRounds||wod.exercises.length}분</span>`:`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.targetSets}세트</span>`}
+      ${wod.type==='AMRAP'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${fmtTime(tl)}</span>`:wod.type==='EMOM'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.emomRounds||3}라운드</span>`:`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.targetSets}세트</span>`}
     </div>
     <div style="background:var(--card2);border-radius:9px;padding:9px 11px;font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">${typeDesc}</div>
     ${(wod.exercises||[]).map((ex,i)=>`<div style="padding:7px 0;${i<(wod.exercises||[]).length-1?'border-bottom:1px solid var(--border)':''}">
@@ -2546,18 +2546,35 @@ function buildRank(){
   wrap.innerHTML=`<div class="tf" style="font-size:21px;margin-bottom:2px">🏆 ${isInd?'개인 순위':'팀 순위'}</div>
     <div style="color:var(--muted);font-size:10px;margin-bottom:10px">${fmtFull(new Date().toISOString())}</div>`;
 
-  const tg=mkDiv('','display:flex;gap:5px;margin-bottom:14px');
+  const tg=mkDiv('','display:flex;gap:5px;margin-bottom:8px');
   [['class',`${S.user?.class} 순위`],['all','전체 순위']].forEach(([v,l])=>{
     tg.appendChild(mkBtn(`chip ${S.rankView===v?'on':''}`,`flex:1;font-size:11px;padding:7px 3px`,l,()=>setState({rankView:v})));
   });
   wrap.appendChild(tg);
 
   const src=S.rankView==='class'?clsRecs:base;
-  if(src.length===0){ wrap.appendChild(mkDiv('','text-align:center;color:var(--muted);padding:28px','아직 기록이 없습니다 😅')); return wrap; }
+
+  // 난이도 탭
+  const hasDiff=src.some(r=>r.difficulty&&r.difficulty!=='rx');
+  if(hasDiff){
+    const diffTab=mkDiv('','display:flex;gap:5px;margin-bottom:10px');
+    [['all','전체'],['rx','💪 RxD'],['scaled','🔧 Scaled'],['basic','⭐ Basic']].forEach(([v,l])=>{
+      const cnt=v==='all'?src.length:src.filter(r=>(r.difficulty||'rx')===v).length;
+      if(cnt===0&&v!=='all') return;
+      diffTab.appendChild(mkBtn(`chip ${(S.rankDiff||'all')===v?'on':''}`,`flex:1;font-size:11px`,`${l}`,()=>{S.rankDiff=v;render();}));
+    });
+    wrap.appendChild(diffTab);
+  }
+
+  const filteredSrc=S.rankDiff&&S.rankDiff!=='all'
+    ?src.filter(r=>(r.difficulty||'rx')===S.rankDiff)
+    :src;
+
+  if(filteredSrc.length===0){ wrap.appendChild(mkDiv('','text-align:center;color:var(--muted);padding:28px','아직 기록이 없습니다 😅')); return wrap; }
 
   // WOD별로 그룹핑
   const wodGroups={};
-  src.forEach(r=>{
+  filteredSrc.forEach(r=>{
     const key=r.wodTitle||'기타';
     if(!wodGroups[key])wodGroups[key]=[];
     wodGroups[key].push(r);
@@ -2638,6 +2655,7 @@ function buildMyRecord(){
     </div>
     <div style="background:var(--card2);border-radius:7px;padding:6px 8px">
       <div style="font-weight:900;font-size:17px;color:${r.wodType==='AMRAP'?'var(--accent)':r.wodType==='EMOM'?'var(--green)':'var(--blue)'}">${r.wodType==='AMRAP'?`${r.sets}세트 + ${r.reps}회`:r.wodType==='EMOM'?`${r.sets||0}라운드 완료`:fmtTime(r.time)}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:1px">${r.difficulty==='scaled'?'🔧Scaled':r.difficulty==='basic'?'⭐Basic':'💪RxD'}</div>
       ${getMembers(r).length>1?`<div style="color:var(--muted);font-size:9px;margin-top:1px">팀원: ${getMembers(r).join(', ')}</div>`:''}
     </div>`;
     const delBtn=mkBtn('','margin-top:6px;width:100%;background:none;border:1px solid var(--red);color:var(--red);border-radius:8px;padding:5px;font-size:11px',ic.trash+' 이 기록 삭제',()=>{
