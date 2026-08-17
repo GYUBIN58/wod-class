@@ -567,7 +567,7 @@ let S = {
   toast:null,
   // 로그인
   lStep:1,
-  lTeacherId:'', lCls:'', lTeam:'', lName:'', lMembers:[], lMemberInput:'', lErr:'', lWodId:'', lGrade:'2', wodListLoaded:false, wodListReady:false,
+  lTeacherId:'', lCls:'', lTeam:'', lTeamMode:'saved', lName:'', lMembers:[], lMemberInput:'', lErr:'', lWodId:'', lGrade:'2', wodListLoaded:false, wodListReady:false,
   lAdminMode:false, lAdminId:'', lAdminPw:'',
   // 회원가입
   lShowMasterInput:false, lMasterCode:'', lMasterErr:'',
@@ -1081,12 +1081,34 @@ function buildLogin(){
             t+(hasSaved?'<span style="position:absolute;top:2px;right:2px;width:6px;height:6px;background:var(--green);border-radius:50%"></span>':''),
             ()=>{
               const saved=savedTeams.find(st=>st.name===t);
-              setState({lTeam:t,lMembers:saved?[...saved.members]:[],lErr:''});
+              if(saved){
+                // 저장된 팀이 있으면 선택 옵션 표시
+                setState({lTeam:t,lMembers:[...saved.members],lErr:'',lTeamMode:'saved'});
+              } else {
+                setState({lTeam:t,lMembers:[],lErr:'',lTeamMode:'new'});
+              }
             }));
         });
         wrap.appendChild(tg2);
         if(savedTeams.length>0){
-          wrap.appendChild(mkDiv('','font-size:10px;color:var(--muted);margin-bottom:8px','● 표시 = 저장된 팀 구성 있음 (선택 시 자동 로드)'));
+          wrap.appendChild(mkDiv('','font-size:10px;color:var(--muted);margin-bottom:8px','● 표시 = 저장된 팀 구성 있음'));
+        }
+
+        // 저장된 팀 선택 시 → 저장팀 사용 / 새로 구성 선택지 표시
+        const saved=S.lTeam?savedTeams.find(st=>st.name===S.lTeam):null;
+        if(S.lTeam && saved && S.lTeamMode!=='new'){
+          const modeCard=mkDiv('card','margin-bottom:10px;border:1px solid var(--accent)30');
+          modeCard.innerHTML=`<div style="font-size:12px;font-weight:700;margin-bottom:8px">✅ ${S.lTeam} 저장된 구성</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">${saved.members.join(' · ')}</div>`;
+          const modeRow=mkDiv('','display:grid;grid-template-columns:1fr 1fr;gap:6px');
+          modeRow.appendChild(mkBtn('btn-p','font-size:12px','이 팀으로 시작 →',()=>{
+            setState({lMembers:[...saved.members],lTeamMode:'saved'});
+          }));
+          modeRow.appendChild(mkBtn('btn-s','font-size:12px','새로 구성하기',()=>{
+            setState({lMembers:[],lTeamMode:'new'});
+          }));
+          modeCard.appendChild(modeRow);
+          wrap.appendChild(modeCard);
         }
 
         // 저장된 팀 멤버 표시 or 입력
