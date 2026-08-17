@@ -425,6 +425,8 @@ function syncAdminWodInputs(){
   if(rxInps.length>0){ if(!S.adminWod.exerciseRx)S.adminWod.exerciseRx=[]; S.adminWod.exerciseRx=Array.from(rxInps).map(i=>i.value||''); }
   const scInps=document.querySelectorAll('.admin-ex-scale');
   if(scInps.length>0){ if(!S.adminWod.exerciseScale)S.adminWod.exerciseScale=[]; S.adminWod.exerciseScale=Array.from(scInps).map(i=>i.value||''); }
+  const bsInps=document.querySelectorAll('.admin-ex-basic');
+  if(bsInps.length>0){ if(!S.adminWod.exerciseBasic)S.adminWod.exerciseBasic=[]; S.adminWod.exerciseBasic=Array.from(bsInps).map(i=>i.value||''); }
   const minInp=document.querySelector('#admin-wod-min');
   const secInp=document.querySelector('#admin-wod-sec');
   if(minInp) S.adminWod.timeLimitMin=Math.max(0,+minInp.value);
@@ -1583,7 +1585,8 @@ function buildEmom(){
         <div style="font-size:14px;font-weight:700">${i+1}. ${ex}</div>
         <div style="display:flex;gap:6px;margin-top:2px">
           ${(wod.exerciseRx||[])[i]?`<span style="font-size:11px;color:var(--blue);font-weight:700">💪 RxD: ${(wod.exerciseRx||[])[i]}</span>`:''}
-          ${(wod.exerciseScale||[])[i]?`<span style="font-size:11px;color:var(--green);font-weight:700">🔧 Scale: ${(wod.exerciseScale||[])[i]}</span>`:''}
+          ${(wod.exerciseScale||[])[i]?`<span style="font-size:11px;color:var(--green);font-weight:700">🔧 Scaled: ${(wod.exerciseScale||[])[i]}</span>`:''}
+          ${(wod.exerciseBasic||[])[i]?`<span style="font-size:11px;color:var(--yellow);font-weight:700">⭐ Basic: ${(wod.exerciseBasic||[])[i]}</span>`:''}
         </div>
       </div>`).join('')}`;
     wrap.appendChild(exCard);
@@ -1654,7 +1657,8 @@ function buildForTime(){
         <div style="font-size:14px;font-weight:700;color:var(--blue)">${i+1}. ${ex}</div>
         <div style="display:flex;gap:6px;margin-top:2px">
           ${(wod.exerciseRx||[])[i]?`<span style="font-size:11px;color:var(--blue);font-weight:700">💪 RxD: ${(wod.exerciseRx||[])[i]}</span>`:''}
-          ${(wod.exerciseScale||[])[i]?`<span style="font-size:11px;color:var(--green);font-weight:700">🔧 Scale: ${(wod.exerciseScale||[])[i]}</span>`:''}
+          ${(wod.exerciseScale||[])[i]?`<span style="font-size:11px;color:var(--green);font-weight:700">🔧 Scaled: ${(wod.exerciseScale||[])[i]}</span>`:''}
+          ${(wod.exerciseBasic||[])[i]?`<span style="font-size:11px;color:var(--yellow);font-weight:700">⭐ Basic: ${(wod.exerciseBasic||[])[i]}</span>`:''}
         </div>
       </div>`).join('')}`;
     wrap.appendChild(fExList);
@@ -2296,7 +2300,8 @@ function buildWodSim(){
         <div style="font-size:20px;font-weight:900;color:var(--accent);margin-bottom:8px">${slide.exName}</div>
         ${rxStr||scStr?`<div style="display:flex;gap:8px;justify-content:center;margin-bottom:10px;flex-wrap:wrap">
           ${rxStr?`<span style="background:#3b82f620;color:var(--blue);border-radius:8px;padding:4px 12px;font-size:13px;font-weight:700">💪 RxD: ${rxStr}</span>`:''}
-          ${scStr?`<span style="background:#10b98120;color:var(--green);border-radius:8px;padding:4px 12px;font-size:13px;font-weight:700">🔧 Scale: ${scStr}</span>`:''}
+          ${scStr?`<span style="background:#10b98120;color:var(--green);border-radius:8px;padding:4px 12px;font-size:13px;font-weight:700">🔧 Scaled: ${scStr}</span>`:''}
+          ${(wod.exerciseBasic||[])[slide.exNum-1]?`<span style="background:#f59e0b20;color:var(--yellow);border-radius:8px;padding:4px 12px;font-size:13px;font-weight:700">⭐ Basic: ${(wod.exerciseBasic||[])[slide.exNum-1]}</span>`:''}
         </div>`:''}
         <div style="font-size:13px;color:var(--text);line-height:1.8;margin-bottom:10px;text-align:left;white-space:pre-line">${slide.desc}</div>
         <div style="background:var(--card2);border-radius:10px;padding:8px 14px;font-size:12px;color:var(--yellow)">${slide.tip||''}</div>`;
@@ -2806,7 +2811,7 @@ function buildAdminWod(){
       // 편집 버튼
       btnRow2.appendChild(mkBtn('btn-s',`flex:1;font-size:11px;padding:7px`,'✏️ 편집',()=>{
         setState({
-          adminWod:{...w,exercises:[...(w.exercises||[])],exerciseDescs:[...(w.exerciseDescs||[])],exerciseRx:[...(w.exerciseRx||[])],exerciseScale:[...(w.exerciseScale||[])]},
+          adminWod:{...w,exercises:[...(w.exercises||[])],exerciseDescs:[...(w.exerciseDescs||[])],exerciseRx:[...(w.exerciseRx||[])],exerciseScale:[...(w.exerciseScale||[])],exerciseBasic:[...(w.exerciseBasic||[])]},
           adminWodEditId:w.id
         });
       }));
@@ -2936,29 +2941,42 @@ function buildAdminWodForm(){
       S.adminWod.exerciseRx.splice(i,1);
       if(!S.adminWod.exerciseScale) S.adminWod.exerciseScale=[];
       S.adminWod.exerciseScale.splice(i,1);
+      if(!S.adminWod.exerciseBasic) S.adminWod.exerciseBasic=[];
+      S.adminWod.exerciseBasic.splice(i,1);
       render();
     }));
     row.appendChild(nameRow);
 
     // RxD / Scale 입력
-    const rxScRow=mkDiv('','display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px');
+    const rxScRow=mkDiv('','display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:6px');
+    // RxD
     const rxWrap=mkDiv('','');
-    rxWrap.appendChild(mkDiv('','font-size:10px;font-weight:700;color:var(--blue);margin-bottom:3px','💪 RxD (기준 횟수)'));
+    rxWrap.appendChild(mkDiv('','font-size:9px;font-weight:700;color:var(--blue);margin-bottom:3px','💪 RxD'));
     const rxInp=mkInp('inp',{type:'text',value:(aw.exerciseRx||[])[i]||'',placeholder:'예: 10회'},v=>{
       if(!S.adminWod.exerciseRx) S.adminWod.exerciseRx=[];
       S.adminWod.exerciseRx[i]=v;
     });
-    rxInp.className='inp admin-ex-rx'; rxInp.style.cssText='font-size:13px;padding:8px 10px';
+    rxInp.className='inp admin-ex-rx'; rxInp.style.cssText='font-size:12px;padding:7px 8px';
     rxWrap.appendChild(rxInp);
+    // Scaled
     const scWrap=mkDiv('','');
-    scWrap.appendChild(mkDiv('','font-size:10px;font-weight:700;color:var(--green);margin-bottom:3px','🔧 Scale (쉬운 버전)'));
-    const scInp=mkInp('inp',{type:'text',value:(aw.exerciseScale||[])[i]||'',placeholder:'예: 7회 (밴드)'},v=>{
+    scWrap.appendChild(mkDiv('','font-size:9px;font-weight:700;color:var(--green);margin-bottom:3px','🔧 Scaled'));
+    const scInp=mkInp('inp',{type:'text',value:(aw.exerciseScale||[])[i]||'',placeholder:'예: 7회'},v=>{
       if(!S.adminWod.exerciseScale) S.adminWod.exerciseScale=[];
       S.adminWod.exerciseScale[i]=v;
     });
-    scInp.className='inp admin-ex-scale'; scInp.style.cssText='font-size:13px;padding:8px 10px';
+    scInp.className='inp admin-ex-scale'; scInp.style.cssText='font-size:12px;padding:7px 8px';
     scWrap.appendChild(scInp);
-    rxScRow.appendChild(rxWrap); rxScRow.appendChild(scWrap);
+    // Basic
+    const bsWrap=mkDiv('','');
+    bsWrap.appendChild(mkDiv('','font-size:9px;font-weight:700;color:var(--yellow);margin-bottom:3px','⭐ Basic'));
+    const bsInp=mkInp('inp',{type:'text',value:(aw.exerciseBasic||[])[i]||'',placeholder:'예: 5회'},v=>{
+      if(!S.adminWod.exerciseBasic) S.adminWod.exerciseBasic=[];
+      S.adminWod.exerciseBasic[i]=v;
+    });
+    bsInp.className='inp admin-ex-basic'; bsInp.style.cssText='font-size:12px;padding:7px 8px';
+    bsWrap.appendChild(bsInp);
+    rxScRow.appendChild(rxWrap); rxScRow.appendChild(scWrap); rxScRow.appendChild(bsWrap);
     row.appendChild(rxScRow);
     // 운동 설명 입력
     const descLabel=mkDiv('','font-size:10px;color:var(--muted);margin-bottom:3px','💡 운동 설명 (시뮬레이션에 표시됨)');
@@ -2986,6 +3004,8 @@ function buildAdminWodForm(){
       S.adminWod.exerciseRx.push('');
       if(!S.adminWod.exerciseScale) S.adminWod.exerciseScale=[];
       S.adminWod.exerciseScale.push('');
+      if(!S.adminWod.exerciseBasic) S.adminWod.exerciseBasic=[];
+      S.adminWod.exerciseBasic.push('');
       S.adminNewEx='';render();
     }
   }));
