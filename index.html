@@ -1314,6 +1314,7 @@ function buildWorkoutReady(){
       <div style="display:flex;gap:8px;margin-top:3px;margin-left:26px;flex-wrap:wrap">
         ${(wod.exerciseRx||[])[i]?`<span style="font-size:11px;color:var(--blue);font-weight:700;background:#3b82f615;border-radius:6px;padding:2px 7px">💪 RxD: ${(wod.exerciseRx||[])[i]}</span>`:''}
         ${(wod.exerciseScale||[])[i]?`<span style="font-size:11px;color:var(--green);font-weight:700;background:#10b98115;border-radius:6px;padding:2px 7px">🔧 Scale: ${(wod.exerciseScale||[])[i]}</span>`:''}
+        ${(wod.exerciseBasic||[])[i]?`<span style="font-size:11px;color:var(--yellow);font-weight:700;background:#f59e0b15;border-radius:6px;padding:2px 7px">⭐ Basic: ${(wod.exerciseBasic||[])[i]}</span>`:''}
       </div>
     </div>`).join('')}`;
   if(!isInd)c.innerHTML+=`<div style="margin-top:8px;background:var(--card2);border-radius:7px;padding:6px 8px;font-size:11px;color:var(--muted)">👥 참여 팀원: ${S.user?.members?.join(', ')}</div>`;
