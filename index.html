@@ -940,7 +940,7 @@ function buildLogin(){
                 <span class="badge ${isInd?'bg':'bb'}">${isInd?'🏃 개인전':'👥 팀전'}</span>
                 ${w.type==='AMRAP'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${fmtTime(tl)}</span>`:w.type==='EMOM'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${w.emomRounds||3}라운드</span>`:`<span class="badge" style="background:var(--card2);color:var(--muted)">${w.targetSets}세트</span>`}
               </div>
-              <div>${(w.exercises||[]).map((ex,i)=>`<div style="font-size:11px;color:var(--muted);padding:1px 0">${i+1}. ${ex}${(w.exerciseRx||[])[i]?" <span style=\"color:var(--blue);font-size:10px\">💪"+(w.exerciseRx||[])[i]+"</span>":""}</div>`).join('')}</div>
+              <div>${(w.exercises||[]).map((ex,i)=>`<div style="font-size:11px;color:var(--muted);padding:1px 0">${i+1}. ${ex}${(w.exerciseRx||[])[i]?" <span style=\"color:var(--blue);font-size:10px\">💪"+(w.exerciseRx||[])[i]+"</span>":""}${(w.exerciseScale||[])[i]?" <span style=\"color:var(--green);font-size:10px\">🔧"+(w.exerciseScale||[])[i]+"</span>":""}${(w.exerciseBasic||[])[i]?" <span style=\"color:var(--yellow);font-size:10px\">⭐"+(w.exerciseBasic||[])[i]+"</span>":""}</div>`).join('')}</div>
             </div>
             <button onclick="window._startSim('${wId}')" style="width:100%;margin-top:4px;padding:10px;background:var(--blue);color:white;border:none;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif">🎬 시뮬레이션 보기</button>`;
           wrap.appendChild(cardWrap);
@@ -1250,9 +1250,10 @@ function buildHome(){
     ${wod.type==='AMRAP'?`<div style="color:var(--accent);font-weight:700;font-size:11px;margin-bottom:5px">⏱ ${fmtTime(tl)} AMRAP — 최대한 많이 반복!</div>`:wod.type==='EMOM'?`<div style="color:var(--green);font-weight:700;font-size:11px;margin-bottom:5px">🕐 ${wod.emomRounds||wod.exercises.length}분 EMOM — 매 분마다 새 운동!</div>`:`<div style="color:var(--blue);font-weight:700;font-size:11px;margin-bottom:5px">🎯 ${wod.targetSets}세트 For Time — 최대한 빠르게!</div>`}
     ${(wod.exercises||[]).map((ex,i)=>`<div style="padding:4px 0;${i<(wod.exercises||[]).length-1?'border-bottom:1px solid var(--border)':''}">
       <div style="font-size:12px;font-weight:600"><span style="color:var(--accent)">${i+1}.</span> ${ex}</div>
-      <div style="display:flex;gap:6px;margin-top:1px;margin-left:14px">
+      <div style="display:flex;gap:6px;margin-top:1px;margin-left:14px;flex-wrap:wrap">
         ${(wod.exerciseRx||[])[i]?`<span style="font-size:10px;color:var(--blue);font-weight:700">💪${(wod.exerciseRx||[])[i]}</span>`:''}
         ${(wod.exerciseScale||[])[i]?`<span style="font-size:10px;color:var(--green);font-weight:700">🔧${(wod.exerciseScale||[])[i]}</span>`:''}
+        ${(wod.exerciseBasic||[])[i]?`<span style="font-size:10px;color:var(--yellow);font-weight:700">⭐${(wod.exerciseBasic||[])[i]}</span>`:''}
       </div>
     </div>`).join('')}
   </div>`;
