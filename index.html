@@ -137,6 +137,62 @@ window.fbSaveActiveWodIds = async function(tid, ids) {
   }
 };
 
+// 팀 구성 저장 (Firebase)
+window.fbSaveTeamConfig = async function(cls, teamName, members) {
+  try {
+    const sid=(window._S?.selectedSchoolId||'wolchon');
+    const docId=sid+'_'+cls+'_'+teamName;
+    await setDoc(doc(db, 'team_configs', docId), {
+      schoolId:sid, class:cls, teamName, members,
+      updatedAt:new Date().toISOString()
+    });
+  } catch(e) {
+    console.warn('팀 구성 저장 실패:', e);
+  }
+};
+
+// 팀 구성 불러오기 (Firebase → 로컬 병합)
+window.fbLoadTeamConfigs = async function() {
+  try {
+    const sid=(window._S?.selectedSchoolId||'wolchon');
+    const stor=window._stor;
+    const snap=await getDocs(collection(db, 'team_configs'));
+    const byClass={};
+    snap.forEach(d=>{
+      const data=d.data();
+      if(data.schoolId!==sid) return;
+      const cls=data.class;
+      if(!byClass[cls]) byClass[cls]=[];
+      // 중복 팀명 제거 후 추가
+      const idx=byClass[cls].findIndex(t=>t.name===data.teamName);
+      if(idx>=0) byClass[cls][idx]={name:data.teamName,members:data.members};
+      else byClass[cls].push({name:data.teamName,members:data.members});
+    });
+    // 로컬과 병합 (Firebase 우선)
+    Object.entries(byClass).forEach(([cls,fbTeams])=>{
+      const key=sid+'_saved_teams_'+cls;
+      const local=stor.get(key,[]);
+      const merged=[...fbTeams];
+      local.forEach(lt=>{
+        if(!merged.some(ft=>ft.name===lt.name)) merged.push(lt);
+      });
+      stor.set(key,merged);
+    });
+  } catch(e) {
+    console.warn('팀 구성 로드 실패:', e);
+  }
+};
+
+// 팀 구성 삭제 (Firebase)
+window.fbDeleteTeamConfig = async function(cls, teamName) {
+  try {
+    const sid=(window._S?.selectedSchoolId||'wolchon');
+    await deleteDoc(doc(db, 'team_configs', sid+'_'+cls+'_'+teamName));
+  } catch(e) {
+    console.warn('팀 구성 삭제 실패:', e);
+  }
+};
+
 // 담당 반 저장
 window.fbSaveClasses = async function(tid, classes) {
   try {
@@ -252,6 +308,9 @@ window.fbLoadAll = async function() {
       localExam.forEach(r => { if(!fbExamIds.has(r.id)) mergedExam.push(r); });
       stor.set(examStorKey, mergedExam);
     }
+
+    // 팀 구성 불러오기 (학교별)
+    try { await window.fbLoadTeamConfigs(); } catch(e2) {}
 
     console.log('✅ Firestore 동기화 완료');
 
@@ -1064,6 +1123,8 @@ function buildLogin(){
                 if(idx>=0) existing[idx]={name:S.lTeam,members:[...S.lMembers]};
                 else existing.push({name:S.lTeam,members:[...S.lMembers]});
                 stor.set(teamKey,existing);
+                // Firebase에도 저장
+                if(window.fbSaveTeamConfig) window.fbSaveTeamConfig(S.lCls,S.lTeam,[...S.lMembers]);
                 showToast('팀 구성 저장됨 ✅');
                 render();
               }));
@@ -3242,6 +3303,7 @@ function buildAdminTeams(){
         if(!teams[ti].members.includes(v)){
           teams[ti].members.push(v);
           stor.set(teamKey,teams);
+          if(window.fbSaveTeamConfig) window.fbSaveTeamConfig(selCls,team.name,[...teams[ti].members]);
           showToast('멤버 추가됨');render();
         }
       }));
@@ -3251,6 +3313,7 @@ function buildAdminTeams(){
       const delBtn=mkBtn('btn-d','font-size:12px',ic.trash+' 팀 삭제',()=>{
         delBtn.textContent='정말 삭제?';
         delBtn.onclick=()=>{
+          if(window.fbDeleteTeamConfig) window.fbDeleteTeamConfig(selCls,team.name);
           teams.splice(ti,1);
           stor.set(teamKey,teams);
           showToast('팀 삭제됨');render();
