@@ -567,7 +567,7 @@ let S = {
   toast:null,
   // 로그인
   lStep:1,
-  lTeacherId:'', lCls:'', lTeam:'', lTeamMode:'saved', lName:'', lMembers:[], lMemberInput:'', lErr:'', lWodId:'', lGrade:'2', wodListLoaded:false, wodListReady:false,
+  lTeacherId:'', lCls:'', lTeam:'', lTeamMode:'saved', lName:'', lMembers:[], lMemberInput:'', lSaveTeamName:'', lErr:'', lWodId:'', lGrade:'2', wodListLoaded:false, wodListReady:false,
   lAdminMode:false, lAdminId:'', lAdminPw:'',
   // 회원가입
   lShowMasterInput:false, lMasterCode:'', lMasterErr:'',
@@ -1074,42 +1074,31 @@ function buildLogin(){
         const savedTeamNames=savedTeams.map(t=>t.name);
 
         wrap.appendChild(lbl('팀 선택'));
-        const tg2=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:6px');
-        makeTeams(tc).forEach(t=>{
-          const hasSaved=savedTeams.some(st=>st.name===t);
-          tg2.appendChild(mkBtn(`chip ${S.lTeam===t?'on':''}`,`font-size:11px;padding:7px 2px;position:relative`,
-            t+(hasSaved?'<span style="position:absolute;top:2px;right:2px;width:6px;height:6px;background:var(--green);border-radius:50%"></span>':''),
-            ()=>{
-              const saved=savedTeams.find(st=>st.name===t);
-              if(saved){
-                // 저장된 팀이 있으면 선택 옵션 표시
-                setState({lTeam:t,lMembers:[...saved.members],lErr:'',lTeamMode:'saved'});
-              } else {
-                setState({lTeam:t,lMembers:[],lErr:'',lTeamMode:'new'});
-              }
-            }));
-        });
-        wrap.appendChild(tg2);
+
+        // 저장된 팀 목록 (이름으로 바로 선택)
         if(savedTeams.length>0){
-          wrap.appendChild(mkDiv('','font-size:10px;color:var(--muted);margin-bottom:8px','● 표시 = 저장된 팀 구성 있음'));
+          wrap.appendChild(mkDiv('','font-size:11px;color:var(--muted);font-weight:700;margin-bottom:5px','📋 저장된 팀'));
+          const savedGrid=mkDiv('','display:flex;flex-direction:column;gap:5px;margin-bottom:10px');
+          savedTeams.forEach(st=>{
+            const isOn=S.lTeam===st.name&&S.lTeamMode==='saved';
+            const row=mkDiv(`chip ${isOn?'on':''}`,`display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer`);
+            row.innerHTML=`<div><div style="font-weight:700;font-size:13px">${st.name}</div><div style="font-size:10px;color:var(--muted);margin-top:1px">${st.members.join(' · ')}</div></div><span style="color:var(--green);font-size:18px">→</span>`;
+            row.onclick=()=>setState({lTeam:st.name,lMembers:[...st.members],lTeamMode:'saved',lErr:''});
+            savedGrid.appendChild(row);
+          });
+          wrap.appendChild(savedGrid);
+          wrap.appendChild(mkDiv('','font-size:11px;color:var(--muted);font-weight:700;margin-bottom:5px','➕ 새 팀 구성'));
         }
 
-        // 저장된 팀 선택 시 → 저장팀 사용 / 새로 구성 선택지 표시
-        const saved=S.lTeam?savedTeams.find(st=>st.name===S.lTeam):null;
-        if(S.lTeam && saved && S.lTeamMode!=='new'){
-          const modeCard=mkDiv('card','margin-bottom:10px;border:1px solid var(--accent)30');
-          modeCard.innerHTML=`<div style="font-size:12px;font-weight:700;margin-bottom:8px">✅ ${S.lTeam} 저장된 구성</div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">${saved.members.join(' · ')}</div>`;
-          const modeRow=mkDiv('','display:grid;grid-template-columns:1fr 1fr;gap:6px');
-          modeRow.appendChild(mkBtn('btn-p','font-size:12px','이 팀으로 시작 →',()=>{
-            setState({lMembers:[...saved.members],lTeamMode:'saved'});
+        // 팀 번호 선택 (새 팀 만들기용)
+        const tg2=mkDiv('','display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:6px');
+        makeTeams(tc).forEach(t=>{
+          const isOn=S.lTeam===t&&S.lTeamMode==='new';
+          tg2.appendChild(mkBtn(`chip ${isOn?'on':''}`,`font-size:11px;padding:7px 2px`,t,()=>{
+            setState({lTeam:t,lMembers:[],lTeamMode:'new',lErr:''});
           }));
-          modeRow.appendChild(mkBtn('btn-s','font-size:12px','새로 구성하기',()=>{
-            setState({lMembers:[],lTeamMode:'new'});
-          }));
-          modeCard.appendChild(modeRow);
-          wrap.appendChild(modeCard);
-        }
+        });
+        wrap.appendChild(tg2);
 
         // 저장된 팀 멤버 표시 or 입력
         if(S.lTeam){
@@ -1139,17 +1128,30 @@ function buildLogin(){
             const teamKey=schoolKey('saved_teams_'+S.lCls);
             const isAlreadySaved=savedTeams.some(st=>st.name===S.lTeam&&JSON.stringify(st.members)===JSON.stringify(S.lMembers));
             if(!isAlreadySaved){
-              wrap.appendChild(mkBtn('btn-s','font-size:12px;margin-bottom:7px','💾 이 팀 구성 저장',()=>{
-                const existing=stor.get(teamKey,[]);
-                const idx=existing.findIndex(st=>st.name===S.lTeam);
-                if(idx>=0) existing[idx]={name:S.lTeam,members:[...S.lMembers]};
-                else existing.push({name:S.lTeam,members:[...S.lMembers]});
-                stor.set(teamKey,existing);
-                // Firebase에도 저장
-                if(window.fbSaveTeamConfig) window.fbSaveTeamConfig(S.lCls,S.lTeam,[...S.lMembers]);
-                showToast('팀 구성 저장됨 ✅');
-                render();
-              }));
+          // 팀 이름 입력 후 저장
+          if(S.lTeam && S.lMembers.length>0){
+            const saveBox=mkDiv('','background:var(--card2);border-radius:10px;padding:10px;margin-bottom:7px');
+            saveBox.appendChild(mkDiv('','font-size:11px;color:var(--muted);font-weight:700;margin-bottom:6px','💾 이 팀 구성 저장하기'));
+            const nameRow=mkDiv('','display:flex;gap:6px');
+            const nameInp=mkInp('inp',{type:'text',placeholder:'팀 이름 입력 (예: 1팀 불꽃)',value:S.lSaveTeamName||''},v=>{S.lSaveTeamName=v;});
+            nameRow.appendChild(nameInp);
+            nameRow.appendChild(mkBtn('btn-g','white-space:nowrap;padding:0 12px','저장',()=>{
+              const tname=(S.lSaveTeamName||'').trim();
+              if(!tname){showToast('팀 이름을 입력해주세요','error');return;}
+              const existing=stor.get(teamKey,[]);
+              // 같은 이름이면 덮어쓰기, 다른 이름이면 추가
+              const idx=existing.findIndex(st=>st.name===tname);
+              if(idx>=0) existing[idx]={name:tname,members:[...S.lMembers]};
+              else existing.push({name:tname,members:[...S.lMembers]});
+              stor.set(teamKey,existing);
+              if(window.fbSaveTeamConfig) window.fbSaveTeamConfig(S.lCls,tname,[...S.lMembers]);
+              S.lSaveTeamName='';
+              showToast(`"${tname}" 저장됨 ✅`);
+              render();
+            }));
+            saveBox.appendChild(nameRow);
+            wrap.appendChild(saveBox);
+          }
             }
           }
         }
