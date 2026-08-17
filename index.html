@@ -1463,7 +1463,8 @@ function buildAmrap(){
       <div style="font-size:14px;font-weight:700">${i+1}. ${ex}</div>
       <div style="display:flex;gap:6px;margin-top:2px">
         ${(wod.exerciseRx||[])[i]?`<span style="font-size:11px;color:var(--blue);font-weight:700">💪 RxD: ${(wod.exerciseRx||[])[i]}</span>`:''}
-        ${(wod.exerciseScale||[])[i]?`<span style="font-size:11px;color:var(--green);font-weight:700">🔧 Scale: ${(wod.exerciseScale||[])[i]}</span>`:''}
+        ${(wod.exerciseScale||[])[i]?`<span style="font-size:11px;color:var(--green);font-weight:700">🔧 Scaled: ${(wod.exerciseScale||[])[i]}</span>`:''}
+        ${(wod.exerciseBasic||[])[i]?`<span style="font-size:11px;color:var(--yellow);font-weight:700">⭐ Basic: ${(wod.exerciseBasic||[])[i]}</span>`:''}
       </div>
     </div>`).join('')}`;
   wrap.appendChild(exList);
