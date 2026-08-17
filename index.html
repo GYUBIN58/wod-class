@@ -588,7 +588,7 @@ let S = {
   // saveRecord
   srSets:0, srReps:0, srTimeMin:0, srTimeSec:0,
   // rank
-  rankView:'class', rankOnlyTeacherId:'', rankOnlyCls:'전체', rankOnlyDiff:'all', rankDiff:'all', growthDiff:'all',
+  rankView:'class', rankOnlyTeacherId:'', rankOnlyCls:'전체', rankOnlyDiff:'all', rankOnlySearch:'', rankDiff:'all', growthDiff:'all',
   // myRecord
   mrSearch:'',
   // admin
@@ -2010,6 +2010,51 @@ function buildRankOnly(){
 
   let filtered=recs;
   if(S.rankOnlyCls&&S.rankOnlyCls!=='전체') filtered=recs.filter(r=>r.class===S.rankOnlyCls);
+
+  // 이름 검색
+  sc.appendChild(mkDiv('','color:var(--muted);font-size:11px;font-weight:700;margin-bottom:5px','🔍 이름 검색'));
+  const searchRow=mkDiv('','display:flex;gap:6px;margin-bottom:12px');
+  const searchInp=mkInp('inp',{type:'text',placeholder:'이름 입력 (개인전+팀전 모두 검색)',value:S.rankOnlySearch||''},v=>{S.rankOnlySearch=v;render();});
+  searchRow.appendChild(searchInp);
+  if(S.rankOnlySearch){
+    searchRow.appendChild(mkBtn('btn-s','white-space:nowrap;padding:0 10px','✕',()=>{S.rankOnlySearch='';render();}));
+  }
+  sc.appendChild(searchRow);
+
+  // 검색어 있으면 → 이름 포함된 개인전 + 팀 멤버 포함된 팀전 모두 표시
+  if(S.rankOnlySearch&&S.rankOnlySearch.trim()){
+    const q=S.rankOnlySearch.trim();
+    const searchRecs=allRecs.filter(r=>{
+      if(r.mode==='individual'||!r.mode) return (r.name||'').includes(q);
+      // 팀전: members 배열에 이름 포함 여부
+      return (getMembers(r)||[]).some(m=>m.includes(q));
+    });
+
+    if(searchRecs.length===0){
+      sc.appendChild(mkDiv('','text-align:center;color:var(--muted);padding:20px',`"${q}" 관련 기록이 없습니다`));
+      wrap.appendChild(sc); return wrap;
+    }
+
+    sc.appendChild(mkDiv('','font-weight:700;font-size:13px;margin-bottom:8px',`"${q}" 검색 결과 (${searchRecs.length}건)`));
+
+    searchRecs.forEach(r=>{
+      const rc=mkDiv('card','display:flex;align-items:center;gap:10px;margin-bottom:7px;padding:10px 12px');
+      const isTeam=r.mode==='team';
+      const label=isTeam?`${r.class} ${r.team} (팀)`:`${r.class} ${r.name}`;
+      const members=isTeam?(getMembers(r)||[]).join(' · '):'';
+      const diffLabel=r.difficulty==='scaled'?'🔧':r.difficulty==='basic'?'⭐':'💪';
+      const score=r.wodType==='AMRAP'?`${r.sets||0}S+${r.reps||0}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time||0);
+      rc.innerHTML=`
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:13px">${label} ${diffLabel}</div>
+          ${members?`<div style="font-size:10px;color:var(--muted);margin-top:1px">${members}</div>`:''}
+          <div style="font-size:10px;color:var(--muted);margin-top:1px">${r.wodTitle||''} · ${fmtDate(r.date)}</div>
+        </div>
+        <div style="font-weight:900;font-size:16px;color:${r.wodType==='AMRAP'?'var(--accent)':r.wodType==='EMOM'?'var(--green)':'var(--blue)'}">${score}</div>`;
+      sc.appendChild(rc);
+    });
+    wrap.appendChild(sc); return wrap;
+  }
 
   if(filtered.length===0){
     sc.appendChild(mkDiv('','text-align:center;color:var(--muted);padding:30px','<div style="font-size:36px">🏋️</div><div style="margin-top:8px">아직 기록이 없습니다</div>'));
