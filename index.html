@@ -527,7 +527,6 @@ function speak(text){
   }catch(e){}
 }
 function getWodForTeacher(tid){ const map=stor.get(schoolKey('wod_current_by_teacher'),{}); return map[tid]||{...DEFAULT_WOD}; }
-function setWodForTeacher(tid,wod){ const map=stor.get(schoolKey('wod_current_by_teacher'),{}); map[tid]=wod; stor.set(schoolKey('wod_current_by_teacher'),map); }
 function getWodList(tid){ return stor.get(schoolKey('wod_list_'+tid),[]); }
 function setWodList(tid,list){ stor.set(schoolKey('wod_list_'+tid),list); }
 function getActiveWodIds(tid){ return stor.get(schoolKey('wod_active_'+tid),[]); }
@@ -2527,7 +2526,7 @@ function buildWodSim(){
     `<div style="font-weight:700;font-size:15px;margin-bottom:5px">${wod.title}</div>
      <div style="display:flex;gap:5px;flex-wrap:wrap">
        <span class="badge ${wod.type==='AMRAP'?'bo':wod.type==='EMOM'?'bg':'bb'}">${wod.type}</span>
-       ${wod.type==='AMRAP'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${fmtTime(tl)}</span>`:wod.type==='EMOM'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.emomRounds||exercises.length}분</span>`:`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.targetSets}세트</span>`}
+       ${wod.type==='AMRAP'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${fmtTime(tl)}</span>`:wod.type==='EMOM'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.emomRounds||3}라운드</span>`:`<span class="badge" style="background:var(--card2);color:var(--muted)">${wod.targetSets}세트</span>`}
        <span class="badge bg">${exercises.length}가지 운동</span>
      </div>`));
 
@@ -2555,7 +2554,7 @@ function buildWodSim(){
         desc:wod.type==='AMRAP'
           ?`⏱ ${fmtTime(tl)} 동안 아래 운동들을 최대한 많이 반복하는 운동입니다!`
           :wod.type==='EMOM'
-          ?`🕐 매 분마다 새 운동! ${wod.emomRounds||exercises.length}분 동안 총 ${exercises.length}가지 운동을 순서대로 합니다!`
+          ?`🕐 아래 운동들을 1분 안에 완료 → 남은 시간 휴식! ${wod.emomRounds||3}라운드 반복합니다!`
           :`🎯 아래 운동들을 순서대로 ${wod.targetSets}세트 완료하는 운동입니다!`});
       exercises.forEach((ex,i)=>{
         const desc=(wod.exerciseDescs||[])[i]||'선생님이 설명을 입력하지 않았습니다.';
@@ -2563,7 +2562,7 @@ function buildWodSim(){
       });
       slides.push({type:'transition',title:'운동 순서',
         desc:exercises.map((ex,i)=>`${i+1}. ${ex}`).join('\n')
-          +`\n\n${wod.type==='AMRAP'?`⏱ 위 순서를 ${fmtTime(tl)} 동안 반복!`:wod.type==='EMOM'?`🕐 위 순서로 ${wod.emomRounds||exercises.length}분 EMOM!`:`🎯 위 순서로 ${wod.targetSets}세트 완료!`}`});
+          +`\n\n${wod.type==='AMRAP'?`⏱ 위 순서를 ${fmtTime(tl)} 동안 반복!`:wod.type==='EMOM'?`🕐 위 운동들을 1분 안에 완료 → 남은 시간 휴식! ${wod.emomRounds||3}라운드!`:`🎯 위 순서로 ${wod.targetSets}세트 완료!`}`});
       slides.push({type:'outro',emoji:'🔥',title:'준비됐나요?',desc:'정확한 자세로 최선을 다해보세요! 화이팅! 💪'});
       S.simData={slides};S.simSlide=0;render();
     }));
@@ -3189,7 +3188,7 @@ function buildAdminWod(){
         <div style="flex:1;font-weight:700;font-size:12px">${w.title}</div>
         <span class="badge bo">${w.type}</span>
       </div>
-      <div style="font-size:10px;color:var(--muted);margin-bottom:7px">${w.type==='AMRAP'?fmtTime(tl)+' AMRAP':w.type==='EMOM'?(w.emomRounds||w.exercises.length)+'분 EMOM':w.targetSets+'세트 For Time'} · ${w.teamMode==='individual'?'개인전':'팀전'}</div>`;
+      <div style="font-size:10px;color:var(--muted);margin-bottom:7px">${w.type==='AMRAP'?fmtTime(tl)+' AMRAP':w.type==='EMOM'?(w.emomRounds||3)+'라운드 EMOM':w.targetSets+'세트 For Time'} · ${w.teamMode==='individual'?'개인전':'팀전'}</div>`;
 
       const btnRow=mkDiv('','display:flex;gap:5px;flex-wrap:wrap');
       // 공개/비공개 토글
