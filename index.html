@@ -518,7 +518,7 @@ let S = {
   // AMRAP
   aTimeLeft:0, aSets:0, aRunning:false, aDone:false,
   aCheckLogs:[], aCooldown:0, aExCooldown:0,
-  aChk1:false, aChk2:false,
+  aChk1:false, aChk2:false, srDifficulty:'rx',
   aCurExIdx:0, aExLog:[],
   // ForTime
   fElapsed:0, fRunning:false, fDone:false,
@@ -529,7 +529,7 @@ let S = {
   // saveRecord
   srSets:0, srReps:0, srTimeMin:0, srTimeSec:0,
   // rank
-  rankView:'class', rankOnlyTeacherId:'', rankOnlyCls:'전체',
+  rankView:'class', rankOnlyTeacherId:'', rankOnlyCls:'전체', rankOnlyDiff:'all',
   // myRecord
   mrSearch:'',
   // admin
@@ -1426,7 +1426,7 @@ function buildAmrap(){
     wrap.innerHTML=`<div class="tf" style="font-size:28px;color:var(--accent);text-align:center;margin-top:45px">운동 종료!</div>
       <div style="font-size:64px;font-weight:900;text-align:center;margin:14px 0">${S.aSets}</div>
       <div style="color:var(--muted);font-size:14px;text-align:center;margin-bottom:22px">완료 세트</div>`;
-    wrap.appendChild(mkBtn('btn-p','','기록 저장하기 →',()=>{ clearInterval(workInt); setState({screen:'saveRecord',srSets:S.aSets,srReps:0,aChk1:false,aChk2:false}); }));
+    wrap.appendChild(mkBtn('btn-p','','기록 저장하기 →',()=>{ clearInterval(workInt); setState({screen:'saveRecord',srSets:S.aSets,srReps:0,aChk1:false,aChk2:false,srDifficulty:'rx'}); }));
     return wrap;
   }
 
@@ -1541,7 +1541,7 @@ function buildEmom(){
         <div class="card" style="text-align:center"><div style="font-size:26px;font-weight:900;color:var(--blue)">${60-avgTime}초</div><div style="font-size:11px;color:var(--muted)">평균 휴식</div></div>`;
       wrap.appendChild(statsRow);
     }
-    wrap.appendChild(mkBtn('btn-p','','기록 저장하기 →',()=>{ clearInterval(workInt); setState({screen:'saveRecord',srSets:completedRounds,srReps:0,srTimeMin:0,srTimeSec:0,aChk1:false,aChk2:false}); }));
+    wrap.appendChild(mkBtn('btn-p','','기록 저장하기 →',()=>{ clearInterval(workInt); setState({screen:'saveRecord',srSets:completedRounds,srReps:0,srTimeMin:0,srTimeSec:0,aChk1:false,aChk2:false,srDifficulty:'rx'}); }));
     return wrap;
   }
 
@@ -1694,7 +1694,7 @@ function buildForTime(){
     cancelBtn.style.opacity=canCancelSet?'1':'0.4';
     wrap.appendChild(cancelBtn);
   } else {
-    wrap.appendChild(mkBtn('btn-p','margin-bottom:7px','기록 저장하기 →',()=>{ clearInterval(workInt); const m=Math.floor(S.fElapsed/60),s=S.fElapsed%60; setState({screen:'saveRecord',srTimeMin:m,srTimeSec:s,aChk1:false,aChk2:false}); }));
+    wrap.appendChild(mkBtn('btn-p','margin-bottom:7px','기록 저장하기 →',()=>{ clearInterval(workInt); const m=Math.floor(S.fElapsed/60),s=S.fElapsed%60; setState({screen:'saveRecord',srTimeMin:m,srTimeSec:s,aChk1:false,aChk2:false,srDifficulty:'rx'}); }));
   }
 
   const ctrl=mkDiv('','display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:7px');
@@ -1728,6 +1728,21 @@ function buildSaveRecord(){
   wrap.appendChild(mkDiv('','',`<div class="tf" style="font-size:21px;color:var(--accent);margin-bottom:2px">${isInd?'기록 저장':'우리 팀 기록 저장'}</div><div style="color:var(--muted);font-size:11px;margin-bottom:12px">${wod.title} · ${wod.type}</div>`));
 
   const c=mkDiv('card','margin-bottom:11px');
+
+  // 난이도 선택 (RxD/Scaled/Basic 중 하나 이상 있을 때만 표시)
+  const hasLevels=(wod.exerciseRx||[]).some(x=>x)||(wod.exerciseScale||[]).some(x=>x)||(wod.exerciseBasic||[]).some(x=>x);
+  if(hasLevels){
+    const diffCard=mkDiv('card','margin-bottom:11px');
+    diffCard.innerHTML='<div style="font-weight:700;font-size:13px;margin-bottom:8px">🏅 난이도 선택</div>';
+    const diffRow=mkDiv('','display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px');
+    [['rx','💪 RxD','var(--blue)'],['scaled','🔧 Scaled','var(--green)'],['basic','⭐ Basic','var(--yellow)']].forEach(([val,label,color])=>{
+      const btn=mkBtn(`chip ${S.srDifficulty===val?'on':''}`,`font-size:12px;padding:9px;border-color:${S.srDifficulty===val?color:'var(--border)'}`,label,()=>setState({srDifficulty:val}));
+      if(S.srDifficulty===val) btn.style.cssText+=`color:${color};background:${color}15;border-color:${color}`;
+      diffRow.appendChild(btn);
+    });
+    diffCard.appendChild(diffRow);
+    wrap.appendChild(diffCard);
+  }
   if(isAmrap){
     c.innerHTML=`<div style="color:var(--muted);font-size:11px;margin-bottom:6px">완료 세트 수</div>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
@@ -1825,6 +1840,7 @@ function doSaveRecord(){
     teacherName:teacher?.name||'',
     wodTitle:wod.title,
     wodType:wod.type,
+    difficulty:S.srDifficulty||'rx',
     ...(wod.type==='AMRAP'
       ?{sets:S.srSets,reps:S.srReps,checkLogs:[...S.aCheckLogs],completedExercisesLog:[...S.aExLog]}
       :wod.type==='EMOM'
@@ -1876,7 +1892,23 @@ function buildRankOnly(){
   if(!S.rankOnlyTeacherId){wrap.appendChild(sc);return wrap;}
 
   const today=new Date().toISOString().slice(0,10);
-  const recs=S.records.filter(r=>r.teacherId===S.rankOnlyTeacherId&&r.date.slice(0,10)===today);
+  const allRecs=S.records.filter(r=>r.teacherId===S.rankOnlyTeacherId&&r.date.slice(0,10)===today);
+
+  // 난이도 탭
+  const hasDifficulty=allRecs.some(r=>r.difficulty&&r.difficulty!=='rx');
+  if(hasDifficulty||allRecs.length>0){
+    const diffTab=mkDiv('','display:flex;gap:6px;margin-bottom:12px');
+    [['rx','💪 RxD'],['scaled','🔧 Scaled'],['basic','⭐ Basic'],['all','전체']].forEach(([v,l])=>{
+      const cnt=v==='all'?allRecs.length:allRecs.filter(r=>(r.difficulty||'rx')===v).length;
+      if(cnt===0&&v!=='all') return;
+      diffTab.appendChild(mkBtn(`chip ${(S.rankOnlyDiff||'all')===v?'on':''}`,`flex:1;font-size:12px`,`${l} (${cnt})`,()=>{S.rankOnlyDiff=v;render();}));
+    });
+    sc.appendChild(diffTab);
+  }
+
+  const recs=S.rankOnlyDiff&&S.rankOnlyDiff!=='all'
+    ?allRecs.filter(r=>(r.difficulty||'rx')===S.rankOnlyDiff)
+    :allRecs;
   // 기록의 실제 wodType 기준으로 정렬 (선생님이 WOD를 바꿔도 이전 기록 정렬이 깨지지 않도록)
   const wodType=recs.length>0?(recs[0].wodType||'ForTime'):'ForTime';
   const medals=['🥇','🥈','🥉'];
@@ -1920,9 +1952,10 @@ function buildRankOnly(){
     const name=r.mode==='team'?`${r.class} ${r.team}`:`${r.class} ${r.name||getMembers(r)[0]||''}`;
     const sub=r.mode==='team'?getMembers(r).join(', '):'';
     const rankLabel=i<3?medals[i]:(i+1)+'위';
+    const diffLabel=r.difficulty==='scaled'?'🔧':r.difficulty==='basic'?'⭐':'💪';
     rc.innerHTML=`<div style="font-size:${i<3?22:14}px;min-width:30px;text-align:center">${rankLabel}</div>
       <div style="flex:1">
-        <div style="font-weight:700;font-size:14px">${name}</div>
+        <div style="font-weight:700;font-size:14px">${name} <span style="font-size:11px">${diffLabel}</span></div>
         ${sub?`<div style="color:var(--muted);font-size:10px">${sub}</div>`:''}
       </div>
       <div style="font-weight:900;font-size:16px;color:${wodType==='AMRAP'?'var(--accent)':wodType==='EMOM'?'var(--green)':'var(--blue)'}">${wodType==='AMRAP'?`${r.sets||0}S+${r.reps||0}`:wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time)}</div>`;
