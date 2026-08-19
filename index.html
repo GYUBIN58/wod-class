@@ -806,6 +806,104 @@ function buildSchoolSelect(){
   return wrap;
 }
 
+// ── WOD 시뮬레이션 ──
+function buildWodSim(){
+  const tid=S.adminWodSimId||S.user?.teacherId;
+  const wod=getWodList(tid).find(w=>w.id===S.adminWodSimId)||getActiveWod();
+  if(!wod) return mkDiv('','padding:30px;text-align:center;color:var(--muted)','WOD를 찾을 수 없습니다');
+
+  const wrap=mkDiv('','min-height:100vh;background:var(--bg);display:flex;flex-direction:column;padding:14px;padding-bottom:30px;overflow-y:auto');
+
+  // 헤더
+  const hdr=mkDiv('','display:flex;align-items:center;gap:10px;margin-bottom:14px');
+  hdr.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px',ic.back,()=>{
+    if(S.simFromStudent) setState({screen:'main',wPhase:'ready'});
+    else setState({screen:'admin',adminTab:'wod'});
+  }));
+  hdr.appendChild(mkDiv('tf','flex:1;font-size:16px',`🎬 ${wod.title}`));
+  wrap.appendChild(hdr);
+
+  const exercises=wod.exercises||[];
+  const tl=wod.timeLimit||(wod.timeLimitMin||10)*60+(wod.timeLimitSec||0);
+
+  // 슬라이드 생성
+  const slides=[];
+  // 1. WOD 소개
+  slides.push({type:'intro'});
+  // 2. 각 운동
+  exercises.forEach((ex,i)=>{
+    const desc=(wod.exerciseDescs||[])[i]||'';
+    slides.push({type:'exercise',exNum:i+1,exName:ex,desc,emoji:'💪'});
+  });
+  // 3. 완료
+  slides.push({type:'ready'});
+
+  const slide=slides[S.simSlide||0]||slides[0];
+  const idx=S.simSlide||0;
+
+  const slideCard=mkDiv('card','min-height:320px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;margin-bottom:16px');
+
+  if(slide.type==='intro'){
+    const typeInfo=wod.type==='AMRAP'?`⏱ ${fmtTime(tl)} AMRAP`:wod.type==='EMOM'?`🔄 ${wod.emomRounds||3}라운드 EMOM`:`🔢 ${wod.targetSets||3}세트 ForTime`;
+    slideCard.innerHTML=`
+      <div style="font-size:48px;margin-bottom:12px">🏋️</div>
+      <div style="font-size:22px;font-weight:900;color:var(--accent);margin-bottom:8px">${wod.title}</div>
+      <div style="background:var(--asoft);border-radius:12px;padding:6px 16px;font-size:14px;font-weight:700;color:var(--accent);margin-bottom:16px">${typeInfo}</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.7">
+        ${wod.type==='AMRAP'?`${fmtTime(tl)} 동안 아래 운동을 최대한 많이 반복해요!`:wod.type==='EMOM'?`아래 운동들을 1분 안에 완료 → 남은 시간 휴식! ${wod.emomRounds||3}라운드 반복합니다!`:`아래 운동들을 ${wod.targetSets}세트 완료하세요!`}
+      </div>
+      <div style="width:100%;text-align:left">
+        ${exercises.map((ex,i)=>`<div style="padding:5px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <span style="color:var(--accent);font-weight:700">${i+1}.</span> ${ex}
+          ${(wod.exerciseRx||[])[i]?`<span style="color:var(--blue);font-size:11px;margin-left:6px">💪${(wod.exerciseRx||[])[i]}</span>`:''}
+          ${(wod.exerciseScale||[])[i]?`<span style="color:var(--green);font-size:11px;margin-left:4px">🔧${(wod.exerciseScale||[])[i]}</span>`:''}
+          ${(wod.exerciseBasic||[])[i]?`<span style="color:var(--yellow);font-size:11px;margin-left:4px">⭐${(wod.exerciseBasic||[])[i]}</span>`:''}
+        </div>`).join('')}
+      </div>`;
+  } else if(slide.type==='exercise'){
+    const rxStr=(wod.exerciseRx||[])[slide.exNum-1];
+    const scStr=(wod.exerciseScale||[])[slide.exNum-1];
+    const bsStr=(wod.exerciseBasic||[])[slide.exNum-1];
+    slideCard.innerHTML=`
+      <div style="background:var(--asoft);border-radius:12px;padding:4px 14px;font-size:11px;color:var(--accent);font-weight:700;margin-bottom:12px">운동 ${slide.exNum} / ${exercises.length}</div>
+      <div style="font-size:40px;margin-bottom:8px">${slide.emoji||'💪'}</div>
+      <div style="font-size:22px;font-weight:900;color:var(--accent);margin-bottom:10px">${slide.exName}</div>
+      ${rxStr||scStr||bsStr?`<div style="display:flex;gap:6px;justify-content:center;margin-bottom:12px;flex-wrap:wrap">
+        ${rxStr?`<span style="background:#3b82f620;color:var(--blue);border-radius:8px;padding:4px 12px;font-size:13px;font-weight:700">💪 RxD: ${rxStr}</span>`:''}
+        ${scStr?`<span style="background:#10b98120;color:var(--green);border-radius:8px;padding:4px 12px;font-size:13px;font-weight:700">🔧 Scaled: ${scStr}</span>`:''}
+        ${bsStr?`<span style="background:#f59e0b20;color:var(--yellow);border-radius:8px;padding:4px 12px;font-size:13px;font-weight:700">⭐ Basic: ${bsStr}</span>`:''}
+      </div>`:''}
+      ${slide.desc?`<div style="font-size:13px;color:var(--text);line-height:1.8;text-align:left;white-space:pre-line;width:100%">${slide.desc}</div>`:''}`;
+  } else if(slide.type==='ready'){
+    slideCard.innerHTML=`
+      <div style="font-size:56px;margin-bottom:12px">🔥</div>
+      <div style="font-size:24px;font-weight:900;color:var(--accent);margin-bottom:8px">준비됐나요?</div>
+      <div style="font-size:14px;color:var(--muted)">운동을 시작해보세요!</div>`;
+  }
+
+  wrap.appendChild(slideCard);
+
+  // 진행 바
+  const prog=mkDiv('','background:var(--border);border-radius:99px;height:4px;margin-bottom:14px;overflow:hidden');
+  prog.appendChild(mkDiv('','background:var(--accent);border-radius:99px;height:100%',`width:${((idx+1)/slides.length)*100}%`));
+  wrap.appendChild(prog);
+
+  // 네비게이션
+  const nav=mkDiv('','display:flex;gap:8px;align-items:center');
+  nav.appendChild(mkBtn('btn-s',`flex:0.6;padding:13px;font-size:16px${idx===0?';opacity:.3':''}`,ic.back,()=>{if(idx>0){S.simSlide=idx-1;render();}}));
+  nav.appendChild(mkDiv('','flex:1;text-align:center;font-size:12px;color:var(--muted)',`${idx+1} / ${slides.length}`));
+  if(idx<slides.length-1){
+    nav.appendChild(mkBtn('btn-p','flex:2;padding:13px;font-size:15px','다음 →',()=>{S.simSlide=idx+1;render();}));
+  } else {
+    nav.appendChild(mkBtn('btn-p','flex:2;padding:13px;font-size:15px','▶ 운동 시작!',()=>{
+      clearInterval(cdInt); clearInterval(workInt);
+      setState({screen:'workout',wPhase:'ready',wCountdown:10,simData:null,simSlide:0,eRestPhase:false,eRoundLogs:[]});
+    }));
+  }
+  wrap.appendChild(nav);
+  return wrap;
+}
+
 function doHomeSearch(){
   const q=(S.homeSearch||'').trim();
   if(!q){ S.homeSearchErr='이름을 입력해주세요'; render(); return; }
