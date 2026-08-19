@@ -497,6 +497,11 @@ function syncAdminWodInputs(){
   if(roundsInp) S.adminWod.emomRounds=Math.max(1,+roundsInp.value);
 }
 
+window._setLastEx=function(idx){
+  S.aLastExIdx=idx;
+  render();
+};
+
 function schoolKey(key){ return (S.selectedSchoolId||'wolchon')+'_'+key; }
 
 // 오디오/음성 함수
@@ -576,8 +581,8 @@ let S = {
   wPhase:'ready', wCountdown:10,
   // AMRAP
   aTimeLeft:0, aSets:0, aRunning:false, aDone:false,
-  aCheckLogs:[], aCooldown:0, aExCooldown:0,
-  aChk1:false, aChk2:false, srDifficulty:'rx',
+  aCheckLogs:[], aCooldown:0, aExCooldown:0, aLastExIdx:0,
+  aChk1:false, aChk2:false, srDifficulty:'rx', srLastExIdx:-1,
   aCurExIdx:0, aExLog:[],
   // ForTime
   fElapsed:0, fRunning:false, fDone:false,
@@ -798,7 +803,7 @@ function buildSchoolSelect(){
           const label=isTeam?`${r.class} ${r.team} (팀)`:`${r.class} ${r.name}`;
           const members=isTeam?(getMembers(r)||[]).join(' · '):'';
           const diffLabel=r.difficulty==='scaled'?'🔧':r.difficulty==='basic'?'⭐':'💪';
-          const score=r.wodType==='AMRAP'?`${r.sets||0}S+${r.reps||0}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time||0);
+          const score=r.wodType==='AMRAP'?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName:r.reps?'+'+r.reps+'회':''}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time||0);
           const rc=mkDiv('','display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)');
           rc.innerHTML=`<div style="flex:1">
             <div style="font-size:12px;font-weight:700">${label} ${diffLabel}</div>
@@ -1114,7 +1119,7 @@ function buildLogin(){
             const label=isTeam?`${r.class} ${r.team}`:`${r.class} ${r.name}`;
             const members=isTeam?(getMembers(r)||[]).join(' · '):'';
             const diffLabel=r.difficulty==='scaled'?'🔧':r.difficulty==='basic'?'⭐':'💪';
-            const score=r.wodType==='AMRAP'?`${r.sets||0}S+${r.reps||0}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time||0);
+            const score=r.wodType==='AMRAP'?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName:r.reps?'+'+r.reps+'회':''}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time||0);
             const rc=mkDiv('','display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)');
             rc.innerHTML=`<div style="flex:1">
               <div style="font-size:12px;font-weight:700">${label} ${diffLabel}</div>
@@ -1585,7 +1590,10 @@ function buildHome(){
     ?clsRecs.find(r=>r.name===S.user?.name&&r.wodType===wod.type&&(r.wodTitle===wod.title||!r.wodTitle))
     :clsRecs.find(r=>r.team===S.user?.team&&r.mode==='team'&&r.wodType===wod.type&&(r.wodTitle===wod.title||!r.wodTitle));
   let topRec=null;
-  if(wod.type==='AMRAP'&&clsRecs.length>0)topRec=clsRecs.reduce((a,b)=>a.sets>b.sets||(a.sets===b.sets&&a.reps>b.reps)?a:b);
+  if(wod.type==='AMRAP'&&clsRecs.length>0)topRec=clsRecs.reduce((a,b)=>{
+    if((a.sets||0)!==(b.sets||0)) return (a.sets||0)>(b.sets||0)?a:b;
+    return (a.lastExIdx||0)>=(b.lastExIdx||0)?a:b;
+  });
   else if(wod.type==='EMOM'&&clsRecs.length>0)topRec=clsRecs.reduce((a,b)=>(a.sets||0)>=(b.sets||0)?a:b);
   else if(wod.type==='ForTime'&&clsRecs.length>0)topRec=clsRecs.reduce((a,b)=>a.time<b.time?a:b);
 
@@ -1773,12 +1781,15 @@ function buildAmrap(){
   if(S.aDone){
     const logs=S.aCheckLogs||[];
     const tl2=wod.timeLimit||(wod.timeLimitMin||10)*60+(wod.timeLimitSec||0);
+    const wod2=getActiveWod();
     wrap.innerHTML=`<div class="tf" style="font-size:28px;color:var(--accent);text-align:center;margin-top:24px;margin-bottom:6px">운동 종료!</div>`;
 
     // 총 세트 수 크게
     const scoreCard=mkDiv('card','text-align:center;margin-bottom:12px;border:2px solid var(--accent)30');
+    const lastExName2=S.aLastExIdx>=0&&wod2?.exercises?.[S.aLastExIdx]?`${S.aLastExIdx+1}. ${wod2.exercises[S.aLastExIdx]}`:'';
     scoreCard.innerHTML=`<div style="font-size:56px;font-weight:900;color:var(--accent);line-height:1">${S.aSets}</div>
-      <div style="color:var(--muted);font-size:13px;margin-top:4px">완료 세트</div>`;
+      <div style="color:var(--muted);font-size:13px;margin-top:4px">완료 세트</div>
+      ${lastExName2?`<div style="background:#ef444415;border-radius:8px;padding:5px 10px;margin-top:8px;font-size:12px;color:var(--red);font-weight:700">📍 마지막: ${lastExName2}</div>`:''}`;
     wrap.appendChild(scoreCard);
 
     // 세트별 소요시간
@@ -1811,7 +1822,7 @@ function buildAmrap(){
       wrap.appendChild(logCard);
     }
 
-    wrap.appendChild(mkBtn('btn-p','','기록 저장하기 →',()=>{ clearInterval(workInt); setState({screen:'saveRecord',srSets:S.aSets,srReps:0,aChk1:false,aChk2:false,srDifficulty:'rx'}); }));
+    wrap.appendChild(mkBtn('btn-p','','기록 저장하기 →',()=>{ clearInterval(workInt); setState({screen:'saveRecord',srSets:S.aSets,srReps:0,aChk1:false,aChk2:false,srDifficulty:'rx',srLastExIdx:S.aLastExIdx||0}); }));
     return wrap;
   }
 
@@ -1843,14 +1854,28 @@ function buildAmrap(){
   const exList=mkDiv('card','margin-bottom:10px');
   exList.innerHTML=`<div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:8px">🏋️ 아래 운동을 순서대로 모두 완료하세요!</div>
     ${exercises.map((ex,i)=>`<div style="padding:7px 0;border-bottom:${i<exercises.length-1?'1px solid var(--border)':'none'}">
-      <div style="font-size:14px;font-weight:700">${i+1}. ${ex}</div>
-      <div style="display:flex;gap:6px;margin-top:2px">
-        ${(wod.exerciseRx||[])[i]?`<span style="font-size:11px;color:var(--blue);font-weight:700">💪 RxD: ${(wod.exerciseRx||[])[i]}</span>`:''}
-        ${(wod.exerciseScale||[])[i]?`<span style="font-size:11px;color:var(--green);font-weight:700">🔧 Scaled: ${(wod.exerciseScale||[])[i]}</span>`:''}
-        ${(wod.exerciseBasic||[])[i]?`<span style="font-size:11px;color:var(--yellow);font-weight:700">⭐ Basic: ${(wod.exerciseBasic||[])[i]}</span>`:''}
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:700">${i+1}. ${ex}</div>
+          <div style="display:flex;gap:6px;margin-top:2px">
+            ${(wod.exerciseRx||[])[i]?`<span style="font-size:11px;color:var(--blue);font-weight:700">💪 RxD: ${(wod.exerciseRx||[])[i]}</span>`:''}
+            ${(wod.exerciseScale||[])[i]?`<span style="font-size:11px;color:var(--green);font-weight:700">🔧 Scaled: ${(wod.exerciseScale||[])[i]}</span>`:''}
+            ${(wod.exerciseBasic||[])[i]?`<span style="font-size:11px;color:var(--yellow);font-weight:700">⭐ Basic: ${(wod.exerciseBasic||[])[i]}</span>`:''}
+          </div>
+        </div>
+        <button onclick="window._setLastEx(${i})" style="background:${S.aLastExIdx===i?'var(--red)':'var(--card2)'};border:1px solid ${S.aLastExIdx===i?'var(--red)':'var(--border)'};border-radius:8px;padding:4px 8px;font-size:10px;color:${S.aLastExIdx===i?'#fff':'var(--muted)'};cursor:pointer;white-space:nowrap;flex-shrink:0">
+          ${S.aLastExIdx===i?'📍 여기서 멈춤':'📍 멈춤 표시'}
+        </button>
       </div>
     </div>`).join('')}`;
   wrap.appendChild(exList);
+
+  // 현재 마지막 운동 표시
+  if(S.aLastExIdx>=0&&S.aLastExIdx<exercises.length){
+    const lastExName=exercises[S.aLastExIdx];
+    wrap.appendChild(mkDiv('','background:#ef444415;border:1px solid #ef444440;border-radius:10px;padding:8px 12px;margin-bottom:8px;font-size:11px',
+      `📍 마지막 운동: <b style="color:var(--red)">${S.aLastExIdx+1}. ${lastExName}</b>`));
+  }
 
   // 세트 완료 버튼 (15초 쿨다운)
   const canCheck=S.aCooldown<=0&&S.aRunning;
@@ -2283,7 +2308,7 @@ function doSaveRecord(){
     wodType:wod.type,
     difficulty:S.srDifficulty||'rx',
     ...(wod.type==='AMRAP'
-      ?{sets:S.srSets,reps:S.srReps,checkLogs:[...S.aCheckLogs],completedExercisesLog:[...S.aExLog]}
+      ?{sets:S.srSets,reps:S.srReps,lastExIdx:S.srLastExIdx??-1,lastExName:wod.exercises?.[S.srLastExIdx]||'',checkLogs:[...S.aCheckLogs],completedExercisesLog:[...S.aExLog]}
       :wod.type==='EMOM'
       ?{time:(S.eRound-1)*60+(60-S.eTimeLeft),sets:S.srSets,completedExercisesLog:[]}
       :{time:S.srTimeMin*60+S.srTimeSec,targetSets:wod.targetSets,completedSets:S.fSets,forTimeSetLogs:[...S.fSetLogs],completedExercisesLog:[...S.fExLog]}
@@ -2398,7 +2423,7 @@ function buildRankOnly(){
       const label=isTeam?`${r.class} ${r.team} (팀)`:`${r.class} ${r.name}`;
       const members=isTeam?(getMembers(r)||[]).join(' · '):'';
       const diffLabel=r.difficulty==='scaled'?'🔧':r.difficulty==='basic'?'⭐':'💪';
-      const score=r.wodType==='AMRAP'?`${r.sets||0}S+${r.reps||0}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time||0);
+      const score=r.wodType==='AMRAP'?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName:r.reps?'+'+r.reps+'회':''}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time||0);
       rc.innerHTML=`
         <div style="flex:1">
           <div style="font-weight:700;font-size:13px">${label} ${diffLabel}</div>
@@ -2542,7 +2567,7 @@ function buildRankOnly(){
         <div style="font-weight:700;font-size:14px">${name} <span style="font-size:11px">${diffLabel}</span></div>
         ${sub?`<div style="color:var(--muted);font-size:10px">${sub}</div>`:''}
       </div>
-      <div style="font-weight:900;font-size:16px;color:${wodType==='AMRAP'?'var(--accent)':wodType==='EMOM'?'var(--green)':'var(--blue)'}">${wodType==='AMRAP'?`${r.sets||0}S+${r.reps||0}`:wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time)}</div>`;
+      <div style="font-weight:900;font-size:16px;color:${wodType==='AMRAP'?'var(--accent)':wodType==='EMOM'?'var(--green)':'var(--blue)'}">${wodType==='AMRAP'?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName:r.reps?'+'+r.reps+'회':''}`:wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time)}</div>`;
     sc.appendChild(rc);
   });
 
@@ -3200,7 +3225,7 @@ function buildRank(){
         </div>
         <div style="text-align:right;font-weight:700;font-size:15px;color:${wodType==='AMRAP'?'var(--accent)':wodType==='EMOM'?'var(--green)':'var(--blue)'}">
           ${wodType==='AMRAP'
-            ?`${r.sets||0}S+${r.reps||0}`
+            ?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName:r.reps?'+'+r.reps+'회':''}`
             :wodType==='EMOM'
             ?`${r.sets||0}R`
             :(r.time?fmtTime(r.time):'-')}
@@ -3994,7 +4019,7 @@ function buildAdminRecords(){
         <div style="font-size:10px;color:var(--muted)">${getMembers(r).join(', ')||''} · ${r.wodTitle||''}</div>
       </div>
       <div style="text-align:right">
-        <div style="font-size:14px;font-weight:900;color:${r.wodType==='AMRAP'?'var(--accent)':r.wodType==='EMOM'?'var(--green)':'var(--blue)'}">${r.wodType==='AMRAP'?`${r.sets||0}S+${r.reps||0}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time)}</div>
+        <div style="font-size:14px;font-weight:900;color:${r.wodType==='AMRAP'?'var(--accent)':r.wodType==='EMOM'?'var(--green)':'var(--blue)'}">${r.wodType==='AMRAP'?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName:r.reps?'+'+r.reps+'회':''}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time)}</div>
         <div style="font-size:10px;color:var(--muted);margin-top:1px">${r.difficulty==='scaled'?'🔧Scaled':r.difficulty==='basic'?'⭐Basic':'💪RxD'}</div>
         ${hasAbn?'<span style="color:var(--red);font-size:11px">⚠️</span>':''}
       </div>
