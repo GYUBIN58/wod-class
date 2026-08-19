@@ -1087,6 +1087,126 @@ function buildLogin(){
         setState({lStep:2,lErr:'',lWodId:'',wodListLoaded:false,wodListReady:false});
       }));
 
+      // ── 내 기록 바로 보기 ──
+      const lookupCard=mkDiv('card','margin-bottom:10px;border:1px solid var(--accent)20');
+      lookupCard.appendChild(mkDiv('','font-size:12px;font-weight:700;color:var(--muted);margin-bottom:7px','🔍 내 기록 보기 (이름 검색)'));
+      const sRow=mkDiv('','display:flex;gap:6px');
+      const sInp=mkInp('inp',{type:'text',placeholder:'이름 입력 (예: 홍길동)',value:S.homeSearch||''},v=>{S.homeSearch=v;});
+      sInp.addEventListener('keydown',e=>{if(e.key==='Enter')doHomeSearch();});
+      sRow.appendChild(sInp);
+      sRow.appendChild(mkBtn('btn-p','white-space:nowrap;padding:0 14px;font-size:13px','검색',doHomeSearch));
+      lookupCard.appendChild(sRow);
+      if(S.homeSearchErr) lookupCard.appendChild(mkDiv('','color:var(--red);font-size:11px;margin-top:5px',S.homeSearchErr));
+      wrap.appendChild(lookupCard);
+
+      // 검색 결과
+      if(S.homeSearchResult&&S.homeSearchResult.length>0){
+        const q=S.homeSearch||'';
+        const res=S.homeSearchResult;
+        const today=new Date().toISOString().slice(0,10);
+        const todayRecs=res.filter(r=>r.date&&r.date.slice(0,10)===today);
+
+        if(todayRecs.length>0){
+          const todayCard=mkDiv('card','margin-bottom:8px');
+          todayCard.appendChild(mkDiv('','font-size:12px;font-weight:700;margin-bottom:7px',`📊 오늘 기록 (${todayRecs.length}건)`));
+          todayRecs.forEach(r=>{
+            const isTeam=r.mode==='team';
+            const label=isTeam?`${r.class} ${r.team}`:`${r.class} ${r.name}`;
+            const members=isTeam?(getMembers(r)||[]).join(' · '):'';
+            const diffLabel=r.difficulty==='scaled'?'🔧':r.difficulty==='basic'?'⭐':'💪';
+            const score=r.wodType==='AMRAP'?`${r.sets||0}S+${r.reps||0}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time||0);
+            const rc=mkDiv('','display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)');
+            rc.innerHTML=`<div style="flex:1">
+              <div style="font-size:12px;font-weight:700">${label} ${diffLabel}</div>
+              ${members?`<div style="font-size:10px;color:var(--muted)">${members}</div>`:''}
+              <div style="font-size:10px;color:var(--muted)">${r.wodTitle||''}</div>
+            </div>
+            <div style="font-weight:900;font-size:14px;color:${r.wodType==='AMRAP'?'var(--accent)':r.wodType==='EMOM'?'var(--green)':'var(--blue)'}">${score}</div>`;
+            todayCard.appendChild(rc);
+          });
+          wrap.appendChild(todayCard);
+        }
+
+        // 성장 그래프
+        const wodGroups={};
+        res.sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(r=>{
+          const key=(r.wodTitle||'기타')+'__'+(r.wodType||'');
+          if(!wodGroups[key])wodGroups[key]=[];
+          wodGroups[key].push(r);
+        });
+        const growCard=mkDiv('card','margin-bottom:8px');
+        growCard.appendChild(mkDiv('','font-size:12px;font-weight:700;margin-bottom:7px','📈 성장 그래프'));
+        Object.entries(wodGroups).forEach(([key,wRecs])=>{
+          const wodType=wRecs[0].wodType;
+          const wodTitle=wRecs[0].wodTitle||'기타';
+          const mini=mkDiv('','margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)');
+          if(wodType==='AMRAP'){
+            const maxS=Math.max(...wRecs.map(r=>r.sets||0));
+            const trend=wRecs.length>1?(wRecs[wRecs.length-1].sets||0)-(wRecs[0].sets||0):0;
+            mini.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <span style="font-size:11px;font-weight:700">${wodTitle}</span>
+              <span style="font-size:10px;color:${trend>0?'var(--green)':trend<0?'var(--red)':'var(--muted)'};font-weight:700">${trend>0?'↑+'+trend:trend<0?'↓'+trend:'→'} 최고 ${maxS}S</span>
+            </div>
+            <div style="display:flex;gap:2px;align-items:flex-end;height:44px">
+              ${wRecs.slice(-10).map((r,i,arr)=>{
+                const prev=i>0?arr[i-1].sets||0:null;
+                const cur=r.sets||0;
+                const color=prev===null?'var(--accent)':cur>prev?'var(--green)':cur<prev?'var(--red)':'var(--accent)';
+                return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
+                  <div style="font-size:7px;color:${color};font-weight:700">${cur}</div>
+                  <div style="width:100%;border-radius:2px 2px 0 0;background:${color};height:${maxS>0?(cur/maxS)*32:3}px;min-height:3px"></div>
+                  <div style="font-size:6px;color:var(--muted)">${fmtDate(r.date)}</div>
+                </div>`;
+              }).join('')}
+            </div>`;
+          } else if(wodType==='EMOM'){
+            const maxR=Math.max(...wRecs.map(r=>r.sets||0));
+            const trend=wRecs.length>1?(wRecs[wRecs.length-1].sets||0)-(wRecs[0].sets||0):0;
+            mini.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <span style="font-size:11px;font-weight:700">${wodTitle}</span>
+              <span style="font-size:10px;color:${trend>0?'var(--green)':trend<0?'var(--red)':'var(--muted)'};font-weight:700">${trend>0?'↑+'+trend:trend<0?'↓'+trend:'→'} 최고 ${maxR}R</span>
+            </div>
+            <div style="display:flex;gap:2px;align-items:flex-end;height:44px">
+              ${wRecs.slice(-10).map((r,i,arr)=>{
+                const prev=i>0?arr[i-1].sets||0:null;
+                const cur=r.sets||0;
+                const color=prev===null?'var(--green)':cur>prev?'var(--green)':cur<prev?'var(--red)':'var(--green)';
+                return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
+                  <div style="font-size:7px;color:${color};font-weight:700">${cur}</div>
+                  <div style="width:100%;border-radius:2px 2px 0 0;background:${color};height:${maxR>0?(cur/maxR)*32:3}px;min-height:3px"></div>
+                  <div style="font-size:6px;color:var(--muted)">${fmtDate(r.date)}</div>
+                </div>`;
+              }).join('')}
+            </div>`;
+          } else {
+            const times=wRecs.map(r=>r.time||0).filter(t=>t>0);
+            if(times.length===0) return;
+            const minT=Math.min(...times);
+            const maxT=Math.max(...times);
+            const trend=wRecs.length>1?(wRecs[0].time||0)-(wRecs[wRecs.length-1].time||0):0;
+            mini.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <span style="font-size:11px;font-weight:700">${wodTitle}</span>
+              <span style="font-size:10px;color:${trend>0?'var(--green)':trend<0?'var(--red)':'var(--muted)'};font-weight:700">${trend>0?'↓단축':trend<0?'↑증가':'→'} 최고 ${fmtTime(minT)}</span>
+            </div>
+            <div style="display:flex;gap:2px;align-items:flex-end;height:44px">
+              ${wRecs.slice(-10).map((r,i,arr)=>{
+                const prev=i>0?arr[i-1].time||0:null;
+                const cur=r.time||0;
+                const color=prev===null?'var(--blue)':cur<prev?'var(--green)':cur>prev?'var(--red)':'var(--blue)';
+                const h=maxT>0?((maxT-cur)/Math.max(maxT-minT,1))*32+6:6;
+                return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
+                  <div style="font-size:6px;color:${color};font-weight:700">${fmtTime(cur)}</div>
+                  <div style="width:100%;border-radius:2px 2px 0 0;background:${color};height:${h}px;min-height:3px"></div>
+                  <div style="font-size:6px;color:var(--muted)">${fmtDate(r.date)}</div>
+                </div>`;
+              }).join('')}
+            </div>`;
+          }
+          growCard.appendChild(mini);
+        });
+        wrap.appendChild(growCard);
+      }
+
     } else if(S.lStep===2){
       // Step2: WOD 선택
       const teacher=findTeacher(S.lTeacherId);
