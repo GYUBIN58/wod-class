@@ -631,9 +631,10 @@ function showToast(msg,type='success'){
   _toastTimer=setTimeout(()=>{ Object.assign(S,{toast:null}); render(); _toastTimer=null; },2500);
 }
 function getActiveWod(){
-  if(!S.user?.teacherId) return {...DEFAULT_WOD};
-  const tid=S.user.teacherId;
-  const selId=S.user.selectedWodId;
+  const tid=S.user?.teacherId||S.lTeacherId;
+  if(!tid) return {...DEFAULT_WOD};
+  // lWodId 우선 (로그인 전/ready 화면), 그 다음 user.selectedWodId
+  const selId=S.lWodId||S.user?.selectedWodId;
   if(selId&&selId!=='__default__'){
     const found=getWodList(tid).find(w=>w.id===selId);
     if(found) return found;
@@ -1698,7 +1699,10 @@ function buildWorkoutReady(){
   const isInd=S.user?.mode==='individual';
   const tl=wod.timeLimit||(wod.timeLimitMin||10)*60+(wod.timeLimitSec||0);
   const wrap=mkDiv('','min-height:100vh;padding:18px;display:flex;flex-direction:column;background:var(--bg)');
-  wrap.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px;display:flex;align-items:center;gap:5px;margin-bottom:14px',ic.back+' 돌아가기',()=>setState({screen:'main'})));
+  wrap.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px;display:flex;align-items:center;gap:5px;margin-bottom:14px',ic.back+' 돌아가기',()=>{
+    if(S.user) setState({screen:'main'});
+    else setState({screen:'login',lStep:3,lErr:''});
+  }));
   const c=mkDiv('card','margin-bottom:13px;border:1px solid #f9731630');
   const typeColor=wod.type==='AMRAP'?'bo':wod.type==='EMOM'?'bg':'bb';
   const typeDesc=wod.type==='AMRAP'
