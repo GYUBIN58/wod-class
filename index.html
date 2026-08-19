@@ -606,6 +606,7 @@ let S = {
   adminClearTarget:'all', adminConfirm:false,
   adminFilterCls:'all', adminFilterMode:'all', adminFilterGrade:'all',
   adminExpandRecord:null, adminSelectedRecords:[],
+  wodImportCode:'', wodImportMsg:'', wodImportErr:false,
   adminClassList:null, adminClassSaving:false, adminClassGrade:'2',
 };
 
@@ -936,6 +937,70 @@ function doHomeSearch(){
   if(result.length===0){ S.homeSearchErr=`"${q}" 관련 기록이 없습니다`; S.homeSearchResult=[]; }
   else S.homeSearchResult=result;
   render();
+}
+
+// WOD 공유 코드 생성
+function makeShareCode(){
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code='WOD-';
+  for(let i=0;i<4;i++) code+=chars[Math.floor(Math.random()*chars.length)];
+  return code;
+}
+
+async function doShareWod(wod){
+  // 이미 shareCode 있으면 재사용
+  const code=wod.shareCode||makeShareCode();
+  const toShare={...wod, shareCode:code, sharedBy:S.user?.teacherId||'', sharedAt:new Date().toISOString()};
+
+  // Firebase shared_wods에 저장
+  try {
+    if(window._db){
+      const {setDoc,doc}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+      await setDoc(doc(window._db,'shared_wods',code),toShare);
+    }
+    // 로컬 WOD에도 shareCode 저장
+    const tid=S.user?.teacherId;
+    const list=getWodList(tid);
+    const idx=list.findIndex(w=>w.id===wod.id);
+    if(idx>=0){ list[idx].shareCode=code; setWodList(tid,list); fbSaveWodList(tid,list); }
+
+    // 클립보드 복사
+    try{ await navigator.clipboard.writeText(code); showToast(`공유 코드: ${code} (복사됨!) 📋`,'success'); }
+    catch(e){ showToast(`공유 코드: ${code}`,'success'); }
+    render();
+  } catch(e) {
+    showToast('공유 실패: '+e.message,'error');
+  }
+}
+
+async function doImportWod(){
+  const code=(S.wodImportCode||'').trim().toUpperCase();
+  if(!code){ S.wodImportMsg='코드를 입력해주세요'; S.wodImportErr=true; render(); return; }
+
+  try {
+    if(!window._db){ S.wodImportMsg='Firebase 연결 필요'; S.wodImportErr=true; render(); return; }
+    const {getDoc,doc}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    const snap=await getDoc(doc(window._db,'shared_wods',code));
+    if(!snap.exists()){ S.wodImportMsg='❌ 코드를 찾을 수 없습니다'; S.wodImportErr=true; render(); return; }
+
+    const sharedWod=snap.data();
+    const tid=S.user?.teacherId;
+    const list=getWodList(tid);
+    // 새 id 부여해서 추가
+    const newWod={...sharedWod, id:'wod_'+Date.now(), shareCode:code, importedFrom:sharedWod.sharedBy};
+    delete newWod.sharedBy; delete newWod.sharedAt;
+    list.push(newWod);
+    setWodList(tid,list);
+    fbSaveWodList(tid,list);
+    S.wodImportMsg=`✅ "${sharedWod.title}" 가져오기 완료!`;
+    S.wodImportErr=false;
+    S.wodImportCode='';
+    render();
+  } catch(e) {
+    S.wodImportMsg='❌ 오류: '+e.message;
+    S.wodImportErr=true;
+    render();
+  }
 }
 
 function doSuperAdminLogin(){
@@ -3582,6 +3647,10 @@ function buildAdminWod(){
           adminWodEditId:w.id
         });
       }));
+      // 공유 버튼
+      btnRow2.appendChild(mkBtn('btn-s',`flex:1;font-size:11px;padding:7px`,'🔗 공유',()=>{
+        doShareWod(w);
+      }));
       // 삭제 버튼
       btnRow2.appendChild(mkBtn('btn-d',`width:38px;font-size:11px;padding:7px;border-radius:10px`,ic.trash,()=>{
         const newList=wodList.filter(x=>x.id!==w.id);
@@ -3598,6 +3667,18 @@ function buildAdminWod(){
       listCard.appendChild(row);
     });
   }
+
+  // WOD 가져오기 (공유 코드)
+  const importCard=mkDiv('card','');
+  importCard.appendChild(mkDiv('','font-weight:700;font-size:13px;margin-bottom:8px','📥 WOD 가져오기'));
+  importCard.appendChild(mkDiv('','font-size:11px;color:var(--muted);margin-bottom:8px','다른 선생님의 공유 코드를 입력하면 WOD를 복사할 수 있어요'));
+  const impRow=mkDiv('','display:flex;gap:6px');
+  const impInp=mkInp('inp',{type:'text',placeholder:'공유 코드 입력 (예: WOD-A3F9)',value:S.wodImportCode||''},v=>{S.wodImportCode=v.toUpperCase();});
+  impRow.appendChild(impInp);
+  impRow.appendChild(mkBtn('btn-p','white-space:nowrap;padding:0 12px;font-size:12px','가져오기',()=>doImportWod()));
+  importCard.appendChild(impRow);
+  if(S.wodImportMsg) importCard.appendChild(mkDiv('','font-size:12px;margin-top:6px;'+(S.wodImportErr?'color:var(--red)':'color:var(--green)'),S.wodImportMsg));
+  wrap.appendChild(importCard);
 
   // 새 WOD 만들기 버튼
   listCard.appendChild(mkBtn('btn-p','margin-top:6px','+ 새 WOD 만들기',()=>{
