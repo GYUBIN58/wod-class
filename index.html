@@ -808,8 +808,9 @@ function buildSchoolSelect(){
 
 // ── WOD 시뮬레이션 ──
 function buildWodSim(){
-  const tid=S.adminWodSimId||S.user?.teacherId;
-  const wod=getWodList(tid).find(w=>w.id===S.adminWodSimId)||getActiveWod();
+  const tid=S.simFromStudent?(S.lTeacherId||S.user?.teacherId):(S.user?.teacherId);
+  const wodList2=getWodList(tid);
+  const wod=S.adminWodSimId?wodList2.find(w=>w.id===S.adminWodSimId):wodList2[0];
   if(!wod) return mkDiv('','padding:30px;text-align:center;color:var(--muted)','WOD를 찾을 수 없습니다');
 
   const wrap=mkDiv('','min-height:100vh;background:var(--bg);display:flex;flex-direction:column;padding:14px;padding-bottom:30px;overflow-y:auto');
@@ -1722,7 +1723,7 @@ function buildWorkoutReady(){
   // 시뮬레이션 버튼
   wrap.appendChild(mkBtn('btn-b','margin-bottom:8px;font-size:13px;padding:12px;display:flex;align-items:center;justify-content:center;gap:5px',
     '🎬 시뮬레이션으로 미리보기',
-    ()=>setState({screen:'wodSim',adminWodSimId:S.user?.selectedWodId,simData:S.simData||null,simSlide:S.simSlide||0,simPlaying:false,simFromStudent:true})));
+    ()=>setState({screen:'wodSim',adminWodSimId:S.lWodId,simData:null,simSlide:0,simPlaying:false,simFromStudent:true})));
   wrap.appendChild(mkBtn('btn-p','font-size:16px;padding:15px','▶ 운동 시작!',startCountdown));
   return wrap;
 }
