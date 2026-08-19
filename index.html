@@ -106,6 +106,7 @@ window.fbSaveTeacher = async function(teacher) {
 
 // WOD 목록 즉시 불러오기
 window.fbLoadWodList = async function(tid) {
+  if(!tid) return; // tid 없으면 스킵
   try {
     const sid=(window._S?.selectedSchoolId||'wolchon');
     const sKey=k=>sid+'_'+k;
@@ -129,6 +130,7 @@ window.fbLoadWodList = async function(tid) {
 
 // WOD 목록 저장
 window.fbSaveWodList = async function(tid, list) {
+  if(!tid) return;
   try {
     const sid=(window._S?.selectedSchoolId||'wolchon');
     await setDoc(doc(db, 'wod_lists', sid+'_'+tid), { list, schoolId:sid });
