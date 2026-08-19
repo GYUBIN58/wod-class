@@ -593,7 +593,7 @@ let S = {
   // saveRecord
   srSets:0, srReps:0, srTimeMin:0, srTimeSec:0,
   // rank
-  rankView:'class', rankOnlyTeacherId:'', rankOnlyCls:'전체', rankOnlyDiff:'all', rankOnlySearch:'', rankOnlyScope:'teacher', rankDiff:'all', growthDiff:'all',
+  rankView:'class', rankOnlyTeacherId:'', rankOnlyCls:'전체', rankOnlyDiff:'all', rankOnlySearch:'', rankOnlyScope:'teacher', rankOnlyDate:'', rankDiff:'all', growthDiff:'all',
   // myRecord
   mrSearch:'',
   // admin
@@ -2407,25 +2407,49 @@ function buildRankOnly(){
   });
   sc.appendChild(clsRow);
 
-  let filtered=recs;
-  if(S.rankOnlyCls&&S.rankOnlyCls!=='전체') filtered=recs.filter(r=>r.class===S.rankOnlyCls);
+  // 날짜 선택
+  if(!S.rankOnlyDate) S.rankOnlyDate=new Date().toISOString().slice(0,10);
+  const dateRow=mkDiv('','display:flex;align-items:center;gap:8px;margin-bottom:12px');
+  dateRow.appendChild(mkBtn('btn-s','padding:6px 12px;font-size:14px','←',()=>{
+    const d=new Date(S.rankOnlyDate); d.setDate(d.getDate()-1);
+    S.rankOnlyDate=d.toISOString().slice(0,10); render();
+  }));
+  const dateLabel=mkDiv('','flex:1;text-align:center;font-size:13px;font-weight:700;background:var(--card2);border-radius:10px;padding:8px');
+  const today2=new Date().toISOString().slice(0,10);
+  dateLabel.textContent=S.rankOnlyDate===today2?'📅 오늘':S.rankOnlyDate;
+  dateRow.appendChild(dateLabel);
+  dateRow.appendChild(mkBtn('btn-s','padding:6px 12px;font-size:14px','→',()=>{
+    const d=new Date(S.rankOnlyDate); d.setDate(d.getDate()+1);
+    const next=d.toISOString().slice(0,10);
+    if(next<=today2){S.rankOnlyDate=next; render();}
+  }));
+  sc.appendChild(dateRow);
 
-  // 이름 검색
+  // 이름 검색 (입력 후 검색버튼 or Enter)
   sc.appendChild(mkDiv('','color:var(--muted);font-size:11px;font-weight:700;margin-bottom:5px','🔍 이름 검색'));
   const searchRow=mkDiv('','display:flex;gap:6px;margin-bottom:12px');
-  const searchInp=mkInp('inp',{type:'text',placeholder:'이름 입력 (개인전+팀전 모두 검색)',value:S.rankOnlySearch||''},v=>{S.rankOnlySearch=v;render();});
+  const searchInp=document.createElement('input');
+  searchInp.type='text'; searchInp.placeholder='이름 입력 (개인전+팀전 모두 검색)';
+  searchInp.value=S.rankOnlySearch||''; searchInp.className='inp'; searchInp.style.flex='1';
+  searchInp.addEventListener('keydown',e=>{if(e.key==='Enter'){S.rankOnlySearch=searchInp.value;render();}});
   searchRow.appendChild(searchInp);
+  searchRow.appendChild(mkBtn('btn-p','white-space:nowrap;padding:0 12px','검색',()=>{S.rankOnlySearch=searchInp.value;render();}));
   if(S.rankOnlySearch){
     searchRow.appendChild(mkBtn('btn-s','white-space:nowrap;padding:0 10px','✕',()=>{S.rankOnlySearch='';render();}));
   }
   sc.appendChild(searchRow);
 
+  // 날짜 기준 재필터
+  const allRecs2=S.records.filter(r=>r.teacherId===S.rankOnlyTeacherId&&r.date.slice(0,10)===S.rankOnlyDate);
+  const allRecs_final=S.rankOnlyDiff&&S.rankOnlyDiff!=='all'
+    ?allRecs2.filter(r=>(r.difficulty||'rx')===S.rankOnlyDiff)
+    :allRecs2;
+
   // 검색어 있으면 → 이름 포함된 개인전 + 팀 멤버 포함된 팀전 모두 표시
   if(S.rankOnlySearch&&S.rankOnlySearch.trim()){
     const q=S.rankOnlySearch.trim();
-    const searchRecs=allRecs.filter(r=>{
+    const searchRecs=allRecs2.filter(r=>{
       if(r.mode==='individual'||!r.mode) return (r.name||'').includes(q);
-      // 팀전: members 배열에 이름 포함 여부
       return (getMembers(r)||[]).some(m=>m.includes(q));
     });
 
@@ -2552,6 +2576,9 @@ function buildRankOnly(){
 
     wrap.appendChild(sc); return wrap;
   }
+
+  let filtered=allRecs_final;
+  if(S.rankOnlyCls&&S.rankOnlyCls!=='전체') filtered=allRecs_final.filter(r=>r.class===S.rankOnlyCls);
 
   if(filtered.length===0){
     sc.appendChild(mkDiv('','text-align:center;color:var(--muted);padding:30px','<div style="font-size:36px">🏋️</div><div style="margin-top:8px">아직 기록이 없습니다</div>'));
