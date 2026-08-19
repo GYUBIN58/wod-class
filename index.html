@@ -897,8 +897,13 @@ function buildWodSim(){
     nav.appendChild(mkBtn('btn-p','flex:2;padding:13px;font-size:15px','다음 →',()=>{S.simSlide=idx+1;render();}));
   } else {
     nav.appendChild(mkBtn('btn-p','flex:2;padding:13px;font-size:15px','▶ 운동 시작!',()=>{
+      const savedWodId=S.adminWodSimId;
+      const savedFromStudent=S.simFromStudent;
       clearInterval(cdInt); clearInterval(workInt);
-      setState({screen:'workout',wPhase:'ready',wCountdown:10,simData:null,simSlide:0,eRestPhase:false,eRoundLogs:[]});
+      setState({screen:'workout',wPhase:'ready',wCountdown:10,
+        simData:null,simSlide:0,
+        lWodId:savedFromStudent?savedWodId:S.lWodId,
+        eRestPhase:false,eRoundLogs:[]});
     }));
   }
   wrap.appendChild(nav);
@@ -1715,7 +1720,10 @@ function buildWorkoutReady(){
         ${(wod.exerciseBasic||[])[i]?`<span style="font-size:11px;color:var(--yellow);font-weight:700;background:#f59e0b15;border-radius:6px;padding:2px 7px">⭐ Basic: ${(wod.exerciseBasic||[])[i]}</span>`:''}
       </div>
     </div>`).join('')}`;
-  if(!isInd)c.innerHTML+=`<div style="margin-top:8px;background:var(--card2);border-radius:7px;padding:6px 8px;font-size:11px;color:var(--muted)">👥 참여 팀원: ${S.user?.members?.join(', ')}</div>`;
+  if(!isInd){
+    const memberList=S.lMembers?.length>0?S.lMembers:(S.user?.members||[]);
+    if(memberList.length>0) c.innerHTML+=`<div style="margin-top:8px;background:var(--card2);border-radius:7px;padding:6px 8px;font-size:11px;color:var(--muted)">👥 참여 팀원: ${memberList.join(', ')}</div>`;
+  }
   wrap.appendChild(c);
   // 시뮬레이션 버튼
   wrap.appendChild(mkBtn('btn-b','margin-bottom:8px;font-size:13px;padding:12px;display:flex;align-items:center;justify-content:center;gap:5px',
