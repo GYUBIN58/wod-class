@@ -1315,8 +1315,7 @@ function buildLogin(){
                 ${w.type==='AMRAP'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${fmtTime(tl)}</span>`:w.type==='EMOM'?`<span class="badge" style="background:var(--card2);color:var(--muted)">${w.emomRounds||3}라운드</span>`:`<span class="badge" style="background:var(--card2);color:var(--muted)">${w.targetSets}세트</span>`}
               </div>
               <div>${(w.exercises||[]).map((ex,i)=>`<div style="font-size:11px;color:var(--muted);padding:1px 0">${i+1}. ${ex}${(w.exerciseRx||[])[i]?" <span style=\"color:var(--blue);font-size:10px\">💪"+(w.exerciseRx||[])[i]+"</span>":""}${(w.exerciseScale||[])[i]?" <span style=\"color:var(--green);font-size:10px\">🔧"+(w.exerciseScale||[])[i]+"</span>":""}${(w.exerciseBasic||[])[i]?" <span style=\"color:var(--yellow);font-size:10px\">⭐"+(w.exerciseBasic||[])[i]+"</span>":""}</div>`).join('')}</div>
-            </div>
-            <button onclick="window._startSim('${wId}')" style="width:100%;margin-top:4px;padding:10px;background:var(--blue);color:white;border:none;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif">🎬 시뮬레이션 보기</button>`;
+            </div>`;
           wrap.appendChild(cardWrap);
         });
       }
