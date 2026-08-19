@@ -1467,8 +1467,8 @@ function buildLogin(){
           savedTeams.forEach(st=>{
             const isOn=S.lTeam===st.name&&S.lTeamMode==='saved';
             const row=mkDiv(`chip ${isOn?'on':''}`,`display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer`);
-            row.innerHTML=`<div><div style="font-weight:700;font-size:13px">${st.name}</div><div style="font-size:10px;color:var(--muted);margin-top:1px">${st.members.join(' · ')}</div></div><span style="color:var(--green);font-size:18px">→</span>`;
-            row.onclick=()=>setState({lTeam:st.name,lMembers:[...st.members],lTeamMode:'saved',lErr:''});
+            row.innerHTML=`<div><div style="font-weight:700;font-size:13px">${st.name.trim()}</div><div style="font-size:10px;color:var(--muted);margin-top:1px">${st.members.join(' · ')}</div></div><span style="color:var(--green);font-size:18px">→</span>`;
+            row.onclick=()=>setState({lTeam:st.name.trim(),lMembers:[...st.members],lTeamMode:'saved',lErr:''});
             savedGrid.appendChild(row);
           });
           wrap.appendChild(savedGrid);
