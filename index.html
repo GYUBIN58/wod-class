@@ -2878,24 +2878,35 @@ function examKey(){ return schoolKey('exam_records_2학년'); }
 function getExamRecords(){ return stor.get(examKey(),[]); }
 function setExamRecords(recs){ stor.set(examKey(),recs); }
 
-function fmtDate(d){
-  if(!d) return '';
-  const dt=new Date(d);
-  return `${dt.getMonth()+1}/${dt.getDate()}`;
-}
-function fmtFull(d){
-  if(!d) return '';
-  const dt=new Date(d);
-  return `${dt.getFullYear()}.${String(dt.getMonth()+1).padStart(2,'0')}.${String(dt.getDate()).padStart(2,'0')}`;
-}
-function fmtTime(sec){
-  if(sec===null||sec===undefined) return '--:--';
-  const s=Math.round(sec);
-  const m=Math.floor(Math.abs(s)/60);
-  const ss=Math.abs(s)%60;
-  return (s<0?'-':'')+String(m).padStart(2,'0')+':'+String(ss).padStart(2,'0');
-}
-
+  const wrap=mkDiv('','');
+  const isInd=S.user?.mode==='individual';
+  const myTid=S.user?.teacherId;
+  const myClass=S.user?.class;
+  const allMy=S.records.filter(r=>{
+    if(r.teacherId!==myTid||r.class!==myClass) return false;
+    if(isInd) return (r.name===S.user?.name)&&(r.mode==='individual'||!r.mode);
+    return r.team===S.user?.team&&r.mode==='team';
+  }).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const label=isInd?S.user?.name:`${S.user?.class} ${S.user?.team}`;
+  wrap.innerHTML=`<div class="tf" style="font-size:21px;margin-bottom:2px">📈 성장 그래프</div>
+    <div style="color:var(--muted);font-size:10px;margin-bottom:8px">${label}의 WOD별 기록 추이</div>`;
+  const hasDiff=allMy.some(r=>r.difficulty&&r.difficulty!=='rx');
+  if(hasDiff){
+    const diffTab=mkDiv('','display:flex;gap:5px;margin-bottom:10px');
+    [['all','전체'],['rx','💪 RxD'],['scaled','🔧 Scaled'],['basic','⭐ Basic']].forEach(([v,l])=>{
+      const cnt=v==='all'?allMy.length:allMy.filter(r=>(r.difficulty||'rx')===v).length;
+      if(cnt===0&&v!=='all') return;
+      diffTab.appendChild(mkBtn(`chip ${(S.growthDiff||'all')===v?'on':''}`,`flex:1;font-size:11px`,l,()=>{S.growthDiff=v;render();}));
+    });
+    wrap.appendChild(diffTab);
+  }
+  const my=S.growthDiff&&S.growthDiff!=='all'?allMy.filter(r=>(r.difficulty||'rx')===S.growthDiff):allMy;
+  if(my.length===0){
+    wrap.appendChild(mkDiv('','text-align:center;color:var(--muted);padding:32px','<div style="font-size:40px">📈</div><div style="margin-top:7px">기록이 쌓이면 표시됩니다!</div>'));
+    return wrap;
+  }
+  const wodGroups={};
+  my.forEach(r=>{const key=r.wodTitle||'기타';if(!wodGroups[key])wodGroups[key]={type:r.wodType,recs:[]};wodGroups[key].recs.push(r);});
 // ── 성장 그래프 ──
 function buildGrowth(){
   const wrap=mkDiv('','');
@@ -2926,30 +2937,52 @@ function buildGrowth(){
     return wrap;
   }
   const wodGroups={};
-  my.forEach(r=>{const key=r.wodTitle||'기타';if(!wodGroups[key])wodGroups[key]={type:r.wodType,recs:[]};wodGroups[key].recs.push(r);});
-  Object.entries(wodGroups).forEach(([wodTitle,{type,recs}])=>{
+  my.forEach(r=>{
+    const key=r.wodTitle||'기타';
+    if(!wodGroups[key])wodGroups[key]={type:r.wodType,recs:[]};
+    wodGroups[key].recs.push(r);
+  });
+  Object.entries(wodGroups).forEach(([wodTitle,grp])=>{
+    const type=grp.type; const recs=grp.recs;
     const cardDiv=mkDiv('card','margin-bottom:12px');
     if(type==='AMRAP'){
       const maxS=Math.max(...recs.map(r=>r.sets||0));
       const avgS=Math.round(recs.reduce((a,b)=>a+(b.sets||0),0)/recs.length);
       const trend=recs.length>1?(recs[recs.length-1].sets||0)-(recs[0].sets||0):0;
-      cardDiv.innerHTML=`<div style="display:flex;justify-content:space-between;margin-bottom:6px"><div><b style="font-size:13px">${wodTitle}</b> <span class="badge bo">AMRAP</span></div><div style="text-align:right"><div style="font-size:20px;font-weight:900;color:var(--accent)">${maxS}S</div><div style="font-size:10px;color:${trend>0?'var(--green)':trend<0?'var(--red)':'var(--muted)'}">${trend>0?'↑+'+trend:trend<0?'↓'+Math.abs(trend):'→'}S</div></div></div>
-        <div style="display:flex;gap:3px;align-items:flex-end;height:60px;margin-bottom:6px">${recs.slice(-10).map((r,i,arr)=>{const prev=i>0?arr[i-1].sets||0:null;const cur=r.sets||0;const color=prev===null?'var(--accent)':cur>prev?'var(--green)':cur<prev?'var(--red)':'var(--accent)';return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px"><div style="font-size:8px;color:${color};font-weight:700">${cur}S</div><div style="width:100%;border-radius:2px 2px 0 0;background:${color};height:${maxS>0?(cur/maxS)*46:3}px;min-height:3px"></div><div style="font-size:6px;color:var(--muted)">${fmtDate(r.date)}</div></div>`;}).join('')}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px"><div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center"><div style="font-size:14px;font-weight:900;color:var(--accent)">${maxS}S</div><div style="font-size:8px;color:var(--muted)">최고</div></div><div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center"><div style="font-size:14px;font-weight:900;color:var(--muted)">${avgS}S</div><div style="font-size:8px;color:var(--muted)">평균</div></div><div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center"><div style="font-size:14px;font-weight:900;color:${trend>0?'var(--green)':trend<0?'var(--red)':'var(--muted)'}">${trend>0?'+'+trend:trend}S</div><div style="font-size:8px;color:var(--muted)">첫→최근</div></div></div>`;
+      const bars=recs.slice(-10).map((r,i,arr)=>{
+        const prev=i>0?arr[i-1].sets||0:null;
+        const cur=r.sets||0;
+        const col=prev===null?'var(--accent)':cur>prev?'var(--green)':cur<prev?'var(--red)':'var(--accent)';
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px"><div style="font-size:8px;color:${col};font-weight:700">${cur}S</div><div style="width:100%;border-radius:2px 2px 0 0;background:${col};height:${maxS>0?(cur/maxS)*46:3}px;min-height:3px"></div><div style="font-size:6px;color:var(--muted)">${fmtDate(r.date)}</div></div>`;
+      }).join('');
+      cardDiv.innerHTML=`<div style="display:flex;justify-content:space-between;margin-bottom:6px"><div><b>${wodTitle}</b> <span class="badge bo">AMRAP</span></div><div style="text-align:right"><div style="font-size:20px;font-weight:900;color:var(--accent)">${maxS}S</div><div style="font-size:10px;color:${trend>0?'var(--green)':trend<0?'var(--red)':'var(--muted)'}">${trend>0?'↑+'+trend:trend<0?'↓'+Math.abs(trend):'→'}S</div></div></div>
+        <div style="display:flex;gap:3px;align-items:flex-end;height:56px;margin-bottom:6px">${bars}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px"><div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center"><div style="font-size:14px;font-weight:900;color:var(--accent)">${maxS}S</div><div style="font-size:8px;color:var(--muted)">최고</div></div><div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center"><div style="font-size:14px;font-weight:900">${avgS}S</div><div style="font-size:8px;color:var(--muted)">평균</div></div><div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center"><div style="font-size:14px;font-weight:900;color:${trend>0?'var(--green)':trend<0?'var(--red)':'var(--muted)'}">${trend>0?'+'+trend:trend}S</div><div style="font-size:8px;color:var(--muted)">첫→최근</div></div></div>`;
     } else if(type==='EMOM'){
       const maxR=Math.max(...recs.map(r=>r.sets||0));
-      const avgR=Math.round(recs.reduce((a,b)=>a+(b.sets||0),0)/recs.length);
       const trend=recs.length>1?(recs[recs.length-1].sets||0)-(recs[0].sets||0):0;
-      cardDiv.innerHTML=`<div style="display:flex;justify-content:space-between;margin-bottom:6px"><div><b style="font-size:13px">${wodTitle}</b> <span class="badge bg">EMOM</span></div><div style="text-align:right"><div style="font-size:20px;font-weight:900;color:var(--green)">${maxR}R</div><div style="font-size:10px;color:${trend>0?'var(--green)':trend<0?'var(--red)':'var(--muted)'}">${trend>0?'↑+'+trend:trend<0?'↓'+Math.abs(trend):'→'}R</div></div></div>
-        <div style="display:flex;gap:3px;align-items:flex-end;height:60px">${recs.slice(-10).map((r,i,arr)=>{const prev=i>0?arr[i-1].sets||0:null;const cur=r.sets||0;const color=prev===null?'var(--green)':cur>prev?'var(--green)':cur<prev?'var(--red)':'var(--green)';return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px"><div style="font-size:8px;color:${color};font-weight:700">${cur}R</div><div style="width:100%;border-radius:2px 2px 0 0;background:${color};height:${maxR>0?(cur/maxR)*46:3}px;min-height:3px"></div><div style="font-size:6px;color:var(--muted)">${fmtDate(r.date)}</div></div>`;}).join('')}</div>`;
+      const bars=recs.slice(-10).map((r,i,arr)=>{
+        const prev=i>0?arr[i-1].sets||0:null; const cur=r.sets||0;
+        const col=prev===null?'var(--green)':cur>prev?'var(--green)':cur<prev?'var(--red)':'var(--green)';
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px"><div style="font-size:8px;color:${col};font-weight:700">${cur}R</div><div style="width:100%;border-radius:2px 2px 0 0;background:${col};height:${maxR>0?(cur/maxR)*46:3}px;min-height:3px"></div><div style="font-size:6px;color:var(--muted)">${fmtDate(r.date)}</div></div>`;
+      }).join('');
+      cardDiv.innerHTML=`<div style="display:flex;justify-content:space-between;margin-bottom:6px"><div><b>${wodTitle}</b> <span class="badge bg">EMOM</span></div><div style="text-align:right"><div style="font-size:20px;font-weight:900;color:var(--green)">${maxR}R</div><div style="font-size:10px;color:${trend>0?'var(--green)':trend<0?'var(--red)':'var(--muted)'}">${trend>0?'↑+'+trend:trend<0?'↓'+Math.abs(trend):'→'}R</div></div></div>
+        <div style="display:flex;gap:3px;align-items:flex-end;height:56px">${bars}</div>`;
     } else {
       const times=recs.map(r=>r.time||0).filter(t=>t>0);
       if(!times.length) return;
-      const minT=Math.min(...times),maxT=Math.max(...times),avgT=Math.round(times.reduce((a,b)=>a+b,0)/times.length);
+      const minT=Math.min(...times); const maxT=Math.max(...times);
+      const avgT=Math.round(times.reduce((a,b)=>a+b,0)/times.length);
       const trend=recs.length>1?(recs[0].time||0)-(recs[recs.length-1].time||0):0;
-      cardDiv.innerHTML=`<div style="display:flex;justify-content:space-between;margin-bottom:6px"><div><b style="font-size:13px">${wodTitle}</b> <span class="badge bb">ForTime</span></div><div style="text-align:right"><div style="font-size:18px;font-weight:900;color:var(--blue)">${fmtTime(minT)}</div><div style="font-size:10px;color:${trend>0?'var(--green)':trend<0?'var(--red)':'var(--muted)'}">${trend>0?'↓단축':trend<0?'↑증가':'→'}</div></div></div>
-        <div style="display:flex;gap:3px;align-items:flex-end;height:60px;margin-bottom:6px">${recs.slice(-10).map((r,i,arr)=>{const prev=i>0?arr[i-1].time||0:null;const cur=r.time||0;const color=prev===null?'var(--blue)':cur<prev?'var(--green)':cur>prev?'var(--red)':'var(--blue)';const h=maxT>0?((maxT-cur)/Math.max(maxT-minT,1))*46+8:8;return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px"><div style="font-size:7px;color:${color};font-weight:700">${fmtTime(cur)}</div><div style="width:100%;border-radius:2px 2px 0 0;background:${color};height:${h}px;min-height:3px"></div><div style="font-size:6px;color:var(--muted)">${fmtDate(r.date)}</div></div>`;}).join('')}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px"><div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center"><div style="font-size:12px;font-weight:900;color:var(--blue)">${fmtTime(minT)}</div><div style="font-size:8px;color:var(--muted)">최고</div></div><div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center"><div style="font-size:12px;font-weight:900;color:var(--muted)">${fmtTime(avgT)}</div><div style="font-size:8px;color:var(--muted)">평균</div></div><div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center"><div style="font-size:12px;font-weight:900;color:${trend>0?'var(--green)':trend<0?'var(--red)':'var(--muted)'}">${trend>0?'-'+fmtTime(trend):trend<0?'+'+fmtTime(Math.abs(trend)):'±0'}</div><div style="font-size:8px;color:var(--muted)">첫→최근</div></div></div>`;
+      const bars=recs.slice(-10).map((r,i,arr)=>{
+        const prev=i>0?arr[i-1].time||0:null; const cur=r.time||0;
+        const col=prev===null?'var(--blue)':cur<prev?'var(--green)':cur>prev?'var(--red)':'var(--blue)';
+        const h=maxT>0?((maxT-cur)/Math.max(maxT-minT,1))*42+8:8;
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px"><div style="font-size:7px;color:${col};font-weight:700">${fmtTime(cur)}</div><div style="width:100%;border-radius:2px 2px 0 0;background:${col};height:${h}px;min-height:3px"></div><div style="font-size:6px;color:var(--muted)">${fmtDate(r.date)}</div></div>`;
+      }).join('');
+      cardDiv.innerHTML=`<div style="display:flex;justify-content:space-between;margin-bottom:6px"><div><b>${wodTitle}</b> <span class="badge bb">ForTime</span></div><div style="text-align:right"><div style="font-size:18px;font-weight:900;color:var(--blue)">${fmtTime(minT)}</div><div style="font-size:10px;color:${trend>0?'var(--green)':trend<0?'var(--red)':'var(--muted)'}">${trend>0?'↓단축':trend<0?'↑증가':'→'}</div></div></div>
+        <div style="display:flex;gap:3px;align-items:flex-end;height:56px;margin-bottom:6px">${bars}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px"><div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center"><div style="font-size:12px;font-weight:900;color:var(--blue)">${fmtTime(minT)}</div><div style="font-size:8px;color:var(--muted)">최고</div></div><div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center"><div style="font-size:12px;font-weight:900">${fmtTime(avgT)}</div><div style="font-size:8px;color:var(--muted)">평균</div></div><div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center"><div style="font-size:12px;font-weight:900;color:${trend>0?'var(--green)':trend<0?'var(--red)':'var(--muted)'}">${trend>0?'-'+fmtTime(trend):trend<0?'+'+fmtTime(Math.abs(trend)):'±0'}</div><div style="font-size:8px;color:var(--muted)">첫→최근</div></div></div>`;
     }
     wrap.appendChild(cardDiv);
   });
