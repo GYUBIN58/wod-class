@@ -1212,12 +1212,11 @@ function buildLogin(){
                   ${r.difficulty==='scaled'?'<span style="font-size:9px;color:var(--green)">🔧Scaled</span>':r.difficulty==='basic'?'<span style="font-size:9px;color:var(--yellow)">⭐Basic</span>':'<span style="font-size:9px;color:var(--blue)">💪RxD</span>'}
                 </div>
                 <div style="font-weight:900;font-size:16px;color:var(--accent)">${r.sets||0}S</div>`;
-                // 세트별 시간 로그
                 if(r.checkLogs&&r.checkLogs.length>0){
                   const logDiv=mkDiv('','margin-top:4px;background:var(--bg);border-radius:6px;padding:5px 7px;font-size:9px;color:var(--muted)');
-                  logDiv.innerHTML=r.checkLogs.map((l,i,arr)=>{
-                    const prev=i>0?arr[i-1].elapsed:0;
-                    return `Set${l.set}: ${fmtTime(l.elapsed-prev)} (누적 ${fmtTime(l.elapsed)})`;
+                  logDiv.textContent=r.checkLogs.map((l,idx2,arr2)=>{
+                    const prev2=idx2>0?arr2[idx2-1].elapsed:0;
+                    return `Set${l.set}: ${fmtTime(l.elapsed-prev2)} (누적 ${fmtTime(l.elapsed)})`;
                   }).join(' · ');
                   row.appendChild(logDiv);
                 }
@@ -2542,6 +2541,8 @@ function buildSaved(){
 
 // ── 로그인 없이 순위 보기 ──
 function buildRankOnly(){
+  if(!S.rankOnlyDate) S.rankOnlyDate=new Date().toISOString().slice(0,10);
+  if(!S.rankOnlyDateMode) S.rankOnlyDateMode='day';
   const wrap=mkDiv('','min-height:100vh;background:var(--bg);display:flex;flex-direction:column');
   const hdr=mkDiv('','background:var(--card);border-bottom:1px solid var(--border);padding:11px 14px;display:flex;align-items:center;gap:10px');
   hdr.appendChild(mkBtn('','background:none;border:none;color:var(--muted);padding:10px 10px 10px 0;min-width:44px;min-height:44px',ic.back,()=>setState({screen:'login'})));
