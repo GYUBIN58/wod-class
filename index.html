@@ -606,7 +606,7 @@ let S = {
   adminClearTarget:'all', adminConfirm:false,
   adminFilterCls:'all', adminFilterMode:'all', adminFilterGrade:'all',
   adminExpandRecord:null, adminSelectedRecords:[],
-  wodImportCode:'', wodImportMsg:'', wodImportErr:false,
+  wodImportCode:'', wodImportMsg:'', wodImportErr:false, wodImportTeacherId:'',
   adminClassList:null, adminClassSaving:false, adminClassGrade:'2',
 };
 
@@ -3730,16 +3730,57 @@ function buildAdminWod(){
     });
   }
 
-  // WOD 가져오기 (공유 코드)
+  // WOD 가져오기 (다른 선생님 WOD 복사)
   const importCard=mkDiv('card','');
-  importCard.appendChild(mkDiv('','font-weight:700;font-size:13px;margin-bottom:8px','📥 WOD 가져오기'));
-  importCard.appendChild(mkDiv('','font-size:11px;color:var(--muted);margin-bottom:8px','다른 선생님의 공유 코드를 입력하면 WOD를 복사할 수 있어요'));
-  const impRow=mkDiv('','display:flex;gap:6px');
-  const impInp=mkInp('inp',{type:'text',placeholder:'공유 코드 입력 (예: WOD-A3F9)',value:S.wodImportCode||''},v=>{S.wodImportCode=v.toUpperCase();});
-  impRow.appendChild(impInp);
-  impRow.appendChild(mkBtn('btn-p','white-space:nowrap;padding:0 12px;font-size:12px','가져오기',()=>doImportWod()));
-  importCard.appendChild(impRow);
-  if(S.wodImportMsg) importCard.appendChild(mkDiv('','font-size:12px;margin-top:6px;'+(S.wodImportErr?'color:var(--red)':'color:var(--green)'),S.wodImportMsg));
+  importCard.appendChild(mkDiv('','font-weight:700;font-size:13px;margin-bottom:8px','📥 다른 선생님 WOD 가져오기'));
+
+  const otherTeachers=getTeachers().filter(t=>t.id!==tid);
+  if(otherTeachers.length===0){
+    importCard.appendChild(mkDiv('','font-size:12px;color:var(--muted);text-align:center;padding:12px','다른 선생님이 없습니다'));
+  } else {
+    // 선생님 선택
+    const selTid=S.wodImportTeacherId||'';
+    const tRow=mkDiv('','display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px');
+    otherTeachers.forEach(t=>{
+      tRow.appendChild(mkBtn(`chip ${selTid===t.id?'on':''}`,`font-size:12px;padding:7px 12px`,t.name,()=>{
+        S.wodImportTeacherId=t.id; S.wodImportMsg=''; render();
+      }));
+    });
+    importCard.appendChild(tRow);
+
+    if(selTid){
+      const otherWods=getWodList(selTid);
+      if(otherWods.length===0){
+        importCard.appendChild(mkDiv('','font-size:12px;color:var(--muted);text-align:center;padding:10px','이 선생님의 WOD가 없습니다'));
+      } else {
+        otherWods.forEach(w=>{
+          const tl=w.timeLimit||(w.timeLimitMin||10)*60+(w.timeLimitSec||0);
+          const alreadyHave=wodList.some(x=>x.shareCode&&x.shareCode===w.shareCode||x.title===w.title);
+          const wRow=mkDiv('','display:flex;align-items:center;gap:8px;padding:8px;background:var(--card2);border-radius:10px;margin-bottom:5px');
+          wRow.innerHTML=`<div style="flex:1">
+            <div style="font-size:12px;font-weight:700">${w.title}</div>
+            <div style="font-size:10px;color:var(--muted)">${w.type==='AMRAP'?fmtTime(tl)+' AMRAP':w.type==='EMOM'?(w.emomRounds||3)+'라운드 EMOM':w.targetSets+'세트 ForTime'} · ${(w.exercises||[]).length}가지 운동</div>
+          </div>`;
+          if(alreadyHave){
+            const lbl=mkDiv('','font-size:10px;color:var(--muted);white-space:nowrap','✅ 보유중');
+            wRow.appendChild(lbl);
+          } else {
+            wRow.appendChild(mkBtn('btn-p','font-size:11px;padding:5px 10px;white-space:nowrap','가져오기',()=>{
+              const newWod={...w,id:'wod_'+Date.now(),importedFrom:selTid};
+              const myList=getWodList(tid);
+              myList.push(newWod);
+              setWodList(tid,myList);
+              fbSaveWodList(tid,myList);
+              showToast(`"${w.title}" 가져옴 ✅`);
+              render();
+            }));
+          }
+          importCard.appendChild(wRow);
+        });
+      }
+    }
+  }
+  if(S.wodImportMsg) importCard.appendChild(mkDiv('','font-size:12px;margin-top:6px;color:var(--green)',S.wodImportMsg));
   wrap.appendChild(importCard);
 
   // 새 WOD 만들기 버튼
