@@ -2878,35 +2878,6 @@ function examKey(){ return schoolKey('exam_records_2학년'); }
 function getExamRecords(){ return stor.get(examKey(),[]); }
 function setExamRecords(recs){ stor.set(examKey(),recs); }
 
-  const wrap=mkDiv('','');
-  const isInd=S.user?.mode==='individual';
-  const myTid=S.user?.teacherId;
-  const myClass=S.user?.class;
-  const allMy=S.records.filter(r=>{
-    if(r.teacherId!==myTid||r.class!==myClass) return false;
-    if(isInd) return (r.name===S.user?.name)&&(r.mode==='individual'||!r.mode);
-    return r.team===S.user?.team&&r.mode==='team';
-  }).sort((a,b)=>new Date(a.date)-new Date(b.date));
-  const label=isInd?S.user?.name:`${S.user?.class} ${S.user?.team}`;
-  wrap.innerHTML=`<div class="tf" style="font-size:21px;margin-bottom:2px">📈 성장 그래프</div>
-    <div style="color:var(--muted);font-size:10px;margin-bottom:8px">${label}의 WOD별 기록 추이</div>`;
-  const hasDiff=allMy.some(r=>r.difficulty&&r.difficulty!=='rx');
-  if(hasDiff){
-    const diffTab=mkDiv('','display:flex;gap:5px;margin-bottom:10px');
-    [['all','전체'],['rx','💪 RxD'],['scaled','🔧 Scaled'],['basic','⭐ Basic']].forEach(([v,l])=>{
-      const cnt=v==='all'?allMy.length:allMy.filter(r=>(r.difficulty||'rx')===v).length;
-      if(cnt===0&&v!=='all') return;
-      diffTab.appendChild(mkBtn(`chip ${(S.growthDiff||'all')===v?'on':''}`,`flex:1;font-size:11px`,l,()=>{S.growthDiff=v;render();}));
-    });
-    wrap.appendChild(diffTab);
-  }
-  const my=S.growthDiff&&S.growthDiff!=='all'?allMy.filter(r=>(r.difficulty||'rx')===S.growthDiff):allMy;
-  if(my.length===0){
-    wrap.appendChild(mkDiv('','text-align:center;color:var(--muted);padding:32px','<div style="font-size:40px">📈</div><div style="margin-top:7px">기록이 쌓이면 표시됩니다!</div>'));
-    return wrap;
-  }
-  const wodGroups={};
-  my.forEach(r=>{const key=r.wodTitle||'기타';if(!wodGroups[key])wodGroups[key]={type:r.wodType,recs:[]};wodGroups[key].recs.push(r);});
 // ── 성장 그래프 ──
 function buildGrowth(){
   const wrap=mkDiv('','');
