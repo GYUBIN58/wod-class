@@ -1598,25 +1598,41 @@ function buildAmrap(){
   } else {
     hbtn.innerHTML=`<div class="hprog" id="hprog" style="width:0%"></div><span style="position:relative;z-index:1">1초 길게 눌러 세트 완료</span><span style="position:relative;z-index:1;font-size:10px;opacity:.7" id="hpct"></span>`;
   }
-  let holdProg=0,holdAnim=null,holdStart=null;
   function startHold(){
-    if(!canCheck)return;
-    holdStart=Date.now();holdProg=0;
-    const pe=document.getElementById('hprog');const pce=document.getElementById('hpct');
-    holdAnim=setInterval(()=>{
+    if(!canCheck||window._holdActive) return;
+    window._holdActive=true;
+    const holdStart=Date.now();
+    const pe=document.getElementById('hprog');
+    const pce=document.getElementById('hpct');
+    window._holdAnim=setInterval(()=>{
       const pct=Math.min(100,Math.floor((Date.now()-holdStart)/10));
-      holdProg=pct;
-      if(pe)pe.style.width=pct+'%';
-      if(pce)pce.textContent=pct<100?`누르는 중... ${pct}%`:'✅ 완료!';
-      if(pct>=100){clearInterval(holdAnim);completeAmrapSet();}
+      if(pe) pe.style.width=pct+'%';
+      if(pce) pce.textContent=pct<100?`누르는 중... ${pct}%`:'✅ 완료!';
+      if(pct>=100){
+        clearInterval(window._holdAnim);
+        window._holdAnim=null;
+        window._holdActive=false;
+        completeAmrapSet();
+      }
     },30);
   }
   function endHold(){
-    clearInterval(holdAnim);
-    if(holdProg<100){const p=document.getElementById('hprog');if(p)p.style.width='0%';const pc=document.getElementById('hpct');if(pc)pc.textContent='';render();}
+    if(window._holdAnim){
+      clearInterval(window._holdAnim);
+      window._holdAnim=null;
+    }
+    window._holdActive=false;
+    const p=document.getElementById('hprog');
+    if(p) p.style.width='0%';
+    const pc=document.getElementById('hpct');
+    if(pc) pc.textContent='';
   }
-  hbtn.addEventListener('mousedown',startHold);hbtn.addEventListener('mouseup',endHold);hbtn.addEventListener('mouseleave',endHold);
-  hbtn.addEventListener('touchstart',e=>{e.preventDefault();startHold();},{passive:false});hbtn.addEventListener('touchend',endHold);
+  hbtn.addEventListener('mousedown',startHold);
+  hbtn.addEventListener('mouseup',endHold);
+  hbtn.addEventListener('mouseleave',endHold);
+  hbtn.addEventListener('touchstart',e=>{e.preventDefault();startHold();},{passive:false});
+  hbtn.addEventListener('touchend',e=>{e.preventDefault();endHold();},{passive:false});
+  hbtn.addEventListener('touchcancel',endHold);
   wrap.appendChild(hbtn);
 
   const ctrl=mkDiv('','display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:7px');
@@ -1630,6 +1646,9 @@ function buildAmrap(){
 }
 
 function completeAmrapSet(){
+  if(window._completingSet) return; // 중복 실행 방지
+  window._completingSet=true;
+  setTimeout(()=>{window._completingSet=false;},500);
   const wod=getActiveWod();
   const tl=wod.timeLimit||(wod.timeLimitMin||10)*60+(wod.timeLimitSec||0);
   const elapsed=tl-S.aTimeLeft;
