@@ -2407,25 +2407,49 @@ function buildRankOnly(){
   });
   sc.appendChild(clsRow);
 
-  // 날짜 선택
+  // 날짜 탭
   if(!S.rankOnlyDate) S.rankOnlyDate=new Date().toISOString().slice(0,10);
-  const dateRow=mkDiv('','display:flex;align-items:center;gap:8px;margin-bottom:12px');
-  dateRow.appendChild(mkBtn('btn-s','padding:6px 12px;font-size:14px','←',()=>{
-    const d=new Date(S.rankOnlyDate); d.setDate(d.getDate()-1);
-    S.rankOnlyDate=d.toISOString().slice(0,10); render();
-  }));
-  const dateLabel=mkDiv('','flex:1;text-align:center;font-size:13px;font-weight:700;background:var(--card2);border-radius:10px;padding:8px');
   const today2=new Date().toISOString().slice(0,10);
-  dateLabel.textContent=S.rankOnlyDate===today2?'📅 오늘':S.rankOnlyDate;
-  dateRow.appendChild(dateLabel);
-  dateRow.appendChild(mkBtn('btn-s','padding:6px 12px;font-size:14px','→',()=>{
+  const dateTabRow=mkDiv('','display:flex;align-items:center;gap:6px;margin-bottom:12px');
+
+  // 오늘 버튼
+  dateTabRow.appendChild(mkBtn(`chip ${S.rankOnlyDate===today2&&S.rankOnlyDateMode!=='all'?'on':''}`,`font-size:12px;padding:8px 12px`,'오늘',()=>{
+    S.rankOnlyDate=today2; S.rankOnlyDateMode='day'; render();
+  }));
+
+  // ← 날짜 → 버튼
+  const prevBtn=mkBtn('btn-s','padding:6px 10px;font-size:13px','←',()=>{
+    const d=new Date(S.rankOnlyDate); d.setDate(d.getDate()-1);
+    S.rankOnlyDate=d.toISOString().slice(0,10); S.rankOnlyDateMode='day'; render();
+  });
+  const nextBtn=mkBtn('btn-s','padding:6px 10px;font-size:13px','→',()=>{
     const d=new Date(S.rankOnlyDate); d.setDate(d.getDate()+1);
     const next=d.toISOString().slice(0,10);
-    if(next<=today2){S.rankOnlyDate=next; render();}
-  }));
-  sc.appendChild(dateRow);
+    if(next<=today2){S.rankOnlyDate=next; S.rankOnlyDateMode='day'; render();}
+  });
+  const dateDisplay=mkDiv(`chip ${S.rankOnlyDateMode!=='all'&&S.rankOnlyDate!==today2?'on':''}`,`font-size:11px;padding:8px 6px;min-width:70px;text-align:center`);
+  dateDisplay.textContent=S.rankOnlyDate!==today2?S.rankOnlyDate:'날짜';
+  const dateGroup=mkDiv('','display:flex;align-items:center;gap:3px');
+  dateGroup.appendChild(prevBtn); dateGroup.appendChild(dateDisplay); dateGroup.appendChild(nextBtn);
+  dateTabRow.appendChild(dateGroup);
 
-  // 이름 검색 (입력 후 검색버튼 or Enter)
+  // 전체 버튼
+  dateTabRow.appendChild(mkBtn(`chip ${S.rankOnlyDateMode==='all'?'on':''}`,`font-size:12px;padding:8px 12px`,'전체',()=>{
+    S.rankOnlyDateMode='all'; render();
+  }));
+  sc.appendChild(dateTabRow);
+
+  // 날짜 기준 기록 필터
+  const isAllMode=S.rankOnlyDateMode==='all';
+  const dateRecs=isAllMode
+    ?S.records.filter(r=>r.teacherId===S.rankOnlyTeacherId)
+    :S.records.filter(r=>r.teacherId===S.rankOnlyTeacherId&&r.date.slice(0,10)===S.rankOnlyDate);
+  const allRecs2=S.rankOnlyDiff&&S.rankOnlyDiff!=='all'
+    ?dateRecs.filter(r=>(r.difficulty||'rx')===S.rankOnlyDiff)
+    :dateRecs;
+  const allRecs_final=allRecs2;
+
+  // 이름 검색
   sc.appendChild(mkDiv('','color:var(--muted);font-size:11px;font-weight:700;margin-bottom:5px','🔍 이름 검색'));
   const searchRow=mkDiv('','display:flex;gap:6px;margin-bottom:12px');
   const searchInp=document.createElement('input');
@@ -2434,146 +2458,64 @@ function buildRankOnly(){
   searchInp.addEventListener('keydown',e=>{if(e.key==='Enter'){S.rankOnlySearch=searchInp.value;render();}});
   searchRow.appendChild(searchInp);
   searchRow.appendChild(mkBtn('btn-p','white-space:nowrap;padding:0 12px','검색',()=>{S.rankOnlySearch=searchInp.value;render();}));
-  if(S.rankOnlySearch){
-    searchRow.appendChild(mkBtn('btn-s','white-space:nowrap;padding:0 10px','✕',()=>{S.rankOnlySearch='';render();}));
-  }
+  if(S.rankOnlySearch) searchRow.appendChild(mkBtn('btn-s','white-space:nowrap;padding:0 10px','✕',()=>{S.rankOnlySearch='';render();}));
   sc.appendChild(searchRow);
 
-  // 날짜 기준 재필터
-  const allRecs2=S.records.filter(r=>r.teacherId===S.rankOnlyTeacherId&&r.date.slice(0,10)===S.rankOnlyDate);
-  const allRecs_final=S.rankOnlyDiff&&S.rankOnlyDiff!=='all'
-    ?allRecs2.filter(r=>(r.difficulty||'rx')===S.rankOnlyDiff)
-    :allRecs2;
 
-  // 검색어 있으면 → 이름 포함된 개인전 + 팀 멤버 포함된 팀전 모두 표시
-  if(S.rankOnlySearch&&S.rankOnlySearch.trim()){
-    const q=S.rankOnlySearch.trim();
-    const searchRecs=allRecs2.filter(r=>{
-      if(r.mode==='individual'||!r.mode) return (r.name||'').includes(q);
-      return (getMembers(r)||[]).some(m=>m.includes(q));
+  // 전체 모드: WOD별로 그룹핑해서 순위 표시
+  if(isAllMode){
+    const wodGroups={};
+    allRecs_final.forEach(r=>{
+      const key=r.wodTitle||'기타';
+      if(!wodGroups[key])wodGroups[key]={type:r.wodType,recs:[]};
+      wodGroups[key].recs.push(r);
     });
-
-    if(searchRecs.length===0){
-      sc.appendChild(mkDiv('','text-align:center;color:var(--muted);padding:20px',`"${q}" 관련 기록이 없습니다`));
+    if(Object.keys(wodGroups).length===0){
+      sc.appendChild(mkDiv('','text-align:center;color:var(--muted);padding:30px','<div style="font-size:36px">🏋️</div><div style="margin-top:8px">기록이 없습니다</div>'));
       wrap.appendChild(sc); return wrap;
     }
-
-    sc.appendChild(mkDiv('','font-weight:700;font-size:13px;margin-bottom:8px',`"${q}" 검색 결과 (${searchRecs.length}건)`));
-
-    searchRecs.forEach(r=>{
-      const rc=mkDiv('card','display:flex;align-items:center;gap:10px;margin-bottom:7px;padding:10px 12px');
-      const isTeam=r.mode==='team';
-      const label=isTeam?`${r.class} ${r.team} (팀)`:`${r.class} ${r.name}`;
-      const members=isTeam?(getMembers(r)||[]).join(' · '):'';
-      const diffLabel=r.difficulty==='scaled'?'🔧':r.difficulty==='basic'?'⭐':'💪';
-      const score=r.wodType==='AMRAP'?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName+(r.reps?' '+r.reps+'개':''):r.reps?'+'+r.reps+'개':''}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time||0);
-      rc.innerHTML=`
-        <div style="flex:1">
-          <div style="font-weight:700;font-size:13px">${label} ${diffLabel}</div>
-          ${members?`<div style="font-size:10px;color:var(--muted);margin-top:1px">${members}</div>`:''}
-          <div style="font-size:10px;color:var(--muted);margin-top:1px">${r.wodTitle||''} · ${fmtDate(r.date)}</div>
-        </div>
-        <div style="font-weight:900;font-size:16px;color:${r.wodType==='AMRAP'?'var(--accent)':r.wodType==='EMOM'?'var(--green)':'var(--blue)'}">${score}</div>`;
-      sc.appendChild(rc);
-    });
-
-    // 성장 그래프 (WOD별)
-    sc.appendChild(mkDiv('','font-weight:700;font-size:14px;margin:16px 0 8px','📈 성장 그래프'));
-
-    // 전체 기록에서 이 이름이 포함된 모든 기록 (날짜 제한 없이)
-    const allSearchRecs=S.records.filter(r=>{
-      if(r.teacherId!==S.rankOnlyTeacherId) return false;
-      if(r.mode==='individual'||!r.mode) return (r.name||'').includes(q);
-      return (getMembers(r)||[]).some(m=>m.includes(q));
-    }).sort((a,b)=>new Date(a.date)-new Date(b.date));
-
-    if(allSearchRecs.length<2){
-      sc.appendChild(mkDiv('card','text-align:center;color:var(--muted);padding:16px','기록이 2개 이상 쌓이면 성장 그래프가 표시됩니다 📈'));
-    } else {
-      // WOD별 그룹핑
-      const wGroups={};
-      allSearchRecs.forEach(r=>{
-        const key=(r.wodTitle||'기타')+'__'+(r.wodType||'');
-        if(!wGroups[key]) wGroups[key]=[];
-        wGroups[key].push(r);
-      });
-
-      Object.entries(wGroups).forEach(([key,wRecs])=>{
-        if(wRecs.length<1) return;
-        const wodType=wRecs[0].wodType;
-        const wodTitle=wRecs[0].wodTitle||'기타';
-        const cardDiv=mkDiv('card','margin-bottom:10px');
-
-        if(wodType==='AMRAP'){
-          const maxS=Math.max(...wRecs.map(r=>r.sets||0));
-          const best=maxS;
-          const trend=wRecs.length>1?(wRecs[wRecs.length-1].sets||0)-(wRecs[0].sets||0):0;
-          cardDiv.innerHTML=`
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-              <div><div style="font-weight:700;font-size:13px">${wodTitle}</div><span class="badge bo" style="font-size:9px">AMRAP</span></div>
-              <div style="text-align:right"><div style="font-size:18px;font-weight:900;color:var(--accent)">${best}S</div><div style="font-size:9px;color:${trend>0?'var(--green)':trend<0?'var(--red)':'var(--muted)'}">${trend>0?'↑+'+trend:trend<0?'↓'+trend:'→'}</div></div>
-            </div>
-            <div style="display:flex;gap:3px;align-items:flex-end;height:60px">
-              ${wRecs.slice(-10).map((r,i,arr)=>{
-                const prev=i>0?arr[i-1].sets||0:null;
-                const cur=r.sets||0;
-                const color=prev===null?'var(--accent)':cur>prev?'var(--green)':cur<prev?'var(--red)':'var(--accent)';
-                return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
-                  <div style="font-size:7px;color:${color};font-weight:700">${cur}S</div>
-                  <div style="width:100%;border-radius:2px 2px 0 0;background:${color};height:${maxS>0?(cur/maxS)*48:3}px;min-height:3px;opacity:.85"></div>
-                  <div style="font-size:6px;color:var(--muted)">${fmtDate(r.date)}</div>
-                </div>`;
-              }).join('')}
-            </div>`;
-        } else if(wodType==='EMOM'){
-          const maxR=Math.max(...wRecs.map(r=>r.sets||0));
-          const trend=wRecs.length>1?(wRecs[wRecs.length-1].sets||0)-(wRecs[0].sets||0):0;
-          cardDiv.innerHTML=`
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-              <div><div style="font-weight:700;font-size:13px">${wodTitle}</div><span class="badge bg" style="font-size:9px">EMOM</span></div>
-              <div style="text-align:right"><div style="font-size:18px;font-weight:900;color:var(--green)">${maxR}R</div><div style="font-size:9px;color:${trend>0?'var(--green)':trend<0?'var(--red)':'var(--muted)'}">${trend>0?'↑+'+trend:trend<0?'↓'+trend:'→'}</div></div>
-            </div>
-            <div style="display:flex;gap:3px;align-items:flex-end;height:60px">
-              ${wRecs.slice(-10).map((r,i,arr)=>{
-                const prev=i>0?arr[i-1].sets||0:null;
-                const cur=r.sets||0;
-                const color=prev===null?'var(--green)':cur>prev?'var(--green)':cur<prev?'var(--red)':'var(--green)';
-                return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
-                  <div style="font-size:7px;color:${color};font-weight:700">${cur}R</div>
-                  <div style="width:100%;border-radius:2px 2px 0 0;background:${color};height:${maxR>0?(cur/maxR)*48:3}px;min-height:3px;opacity:.85"></div>
-                  <div style="font-size:6px;color:var(--muted)">${fmtDate(r.date)}</div>
-                </div>`;
-              }).join('')}
-            </div>`;
-        } else {
-          const times=wRecs.map(r=>r.time||0).filter(t=>t>0);
-          if(times.length===0) return;
-          const minT=Math.min(...times);
-          const maxT=Math.max(...times);
-          const trend=wRecs.length>1?(wRecs[0].time||0)-(wRecs[wRecs.length-1].time||0):0;
-          cardDiv.innerHTML=`
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-              <div><div style="font-weight:700;font-size:13px">${wodTitle}</div><span class="badge bb" style="font-size:9px">ForTime</span></div>
-              <div style="text-align:right"><div style="font-size:16px;font-weight:900;color:var(--blue)">${fmtTime(minT)}</div><div style="font-size:9px;color:${trend>0?'var(--green)':trend<0?'var(--red)':'var(--muted)'}">${trend>0?'↓단축':trend<0?'↑증가':'→'}</div></div>
-            </div>
-            <div style="display:flex;gap:3px;align-items:flex-end;height:60px">
-              ${wRecs.slice(-10).map((r,i,arr)=>{
-                const prev=i>0?arr[i-1].time||0:null;
-                const cur=r.time||0;
-                const color=prev===null?'var(--blue)':cur<prev?'var(--green)':cur>prev?'var(--red)':'var(--blue)';
-                const h=maxT>0?((maxT-cur)/Math.max(maxT-minT,1))*48+8:8;
-                return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
-                  <div style="font-size:6px;color:${color};font-weight:700">${fmtTime(cur)}</div>
-                  <div style="width:100%;border-radius:2px 2px 0 0;background:${color};height:${h}px;min-height:3px;opacity:.85"></div>
-                  <div style="font-size:6px;color:var(--muted)">${fmtDate(r.date)}</div>
-                </div>`;
-              }).join('')}
-            </div>`;
+    Object.entries(wodGroups).forEach(([wodTitle,{type,recs}])=>{
+      const card=mkDiv('card','margin-bottom:12px');
+      const medals=['🥇','🥈','🥉'];
+      card.appendChild(mkDiv('','display:flex;align-items:center;gap:6px;margin-bottom:8px',
+        `<span style="font-weight:700;font-size:14px">${wodTitle}</span><span class="badge ${type==='AMRAP'?'bo':type==='EMOM'?'bg':'bb'}">${type}</span><span style="font-size:10px;color:var(--muted)">· ${recs.length}건</span>`));
+      // 클래스 필터
+      let clsRecs=recs;
+      if(S.rankOnlyCls&&S.rankOnlyCls!=='전체') clsRecs=recs.filter(r=>r.class===S.rankOnlyCls);
+      // 중복 제거 (이름+팀 기준 최고 기록만)
+      const bestMap={};
+      clsRecs.forEach(r=>{
+        const k=r.mode==='team'?`team_${r.class}_${r.team}`:`ind_${r.class}_${r.name}`;
+        if(!bestMap[k]) bestMap[k]=r;
+        else {
+          const cur=bestMap[k], nw=r;
+          if(type==='AMRAP'&&(nw.sets>cur.sets||(nw.sets===cur.sets&&(nw.lastExIdx||0)>(cur.lastExIdx||0)))) bestMap[k]=nw;
+          else if(type==='EMOM'&&(nw.sets||0)>(cur.sets||0)) bestMap[k]=nw;
+          else if(type==='ForTime'&&(nw.time||0)<(cur.time||0)) bestMap[k]=nw;
         }
-        sc.appendChild(cardDiv);
       });
-    }
-
+      let sorted=Object.values(bestMap);
+      if(type==='AMRAP') sorted.sort((a,b)=>b.sets-a.sets||(b.lastExIdx||0)-(a.lastExIdx||0)||b.reps-a.reps);
+      else if(type==='EMOM') sorted.sort((a,b)=>(b.sets||0)-(a.sets||0));
+      else sorted.sort((a,b)=>(a.time||0)-(b.time||0));
+      sorted.slice(0,10).forEach((r,i)=>{
+        const isTeam=r.mode==='team';
+        const name=isTeam?`${r.class} ${r.team}`:`${r.class} ${r.name}`;
+        const members=isTeam?(getMembers(r)||[]).join(' · '):'';
+        const diffLabel=r.difficulty==='scaled'?'🔧':r.difficulty==='basic'?'⭐':'💪';
+        const score=type==='AMRAP'?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName+(r.reps?' '+r.reps+'개':''):r.reps?'+'+r.reps+'개':''}`:type==='EMOM'?`${r.sets||0}R`:fmtTime(r.time||0);
+        const rc=mkDiv('','display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)');
+        rc.innerHTML=`<div style="font-size:${i<3?20:13}px;min-width:28px;text-align:center">${medals[i]||(i+1)+'위'}</div>
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:13px">${name} ${diffLabel}</div>
+            ${members?`<div style="font-size:10px;color:var(--muted)">${members}</div>`:''}
+            <div style="font-size:10px;color:var(--muted)">${fmtDate(r.date)}</div>
+          </div>
+          <div style="font-weight:900;font-size:15px;color:${type==='AMRAP'?'var(--accent)':type==='EMOM'?'var(--green)':'var(--blue)'}">${score}</div>`;
+        card.appendChild(rc);
+      });
+      sc.appendChild(card);
+    });
     wrap.appendChild(sc); return wrap;
   }
 
