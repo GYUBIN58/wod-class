@@ -309,19 +309,6 @@ window.fbLoadAll = async function() {
       });
     }
 
-    // 체력측정 기록 불러오기 (Firebase → 로컬 병합, 학교별)
-    const examSnap = await getDocs(collection(db, 'exam_records'));
-    const fbExamRecs = [];
-    examSnap.forEach(d => { const data=d.data(); if(!data.schoolId||data.schoolId===schoolId) fbExamRecs.push(data); });
-    if(fbExamRecs.length > 0) {
-      const examStorKey = sKey('exam_records_2학년');
-      const localExam = stor.get(examStorKey, []);
-      const fbExamIds = new Set(fbExamRecs.map(r => r.id));
-      const mergedExam = fbExamRecs.map(r => ({...r, synced:true}));
-      localExam.forEach(r => { if(!fbExamIds.has(r.id)) mergedExam.push(r); });
-      stor.set(examStorKey, mergedExam);
-    }
-
     // 팀 구성 불러오기 (학교별)
     try { await window.fbLoadTeamConfigs(); } catch(e2) {}
 
@@ -356,29 +343,6 @@ window.addEventListener('online', () => {
   console.log('🌐 온라인 복귀 - 동기화 시작');
   window.fbLoadAll && window.fbLoadAll();
 
-  // 체력측정 미동기화 기록 자동 업로드
-  if(window.fbSaveExamRecord && window._stor) {
-    const examStorKey=(window._S?.selectedSchoolId||'wolchon')+'_exam_records_2학년';
-    const recs = window._stor.get(examStorKey, []);
-    const unsynced = recs.filter(r => !r.synced);
-    if(unsynced.length > 0) {
-      console.log(`📤 체력측정 미동기화 ${unsynced.length}건 자동 업로드 시작`);
-      (async () => {
-        let success = 0;
-        for(const r of recs) {
-          if(!r.synced) {
-            const ok = await window.fbSaveExamRecord(r);
-            if(ok) { r.synced = true; success++; }
-          }
-        }
-        if(success > 0) {
-          window._stor.set(examStorKey, recs);
-          console.log(`✅ 체력측정 ${success}건 자동 동기화 완료`);
-          if(window._render) window._render();
-        }
-      })();
-    }
-  }
 });
 </script>
 <style>
@@ -561,9 +525,7 @@ let _simWodCache = null; // 시뮬레이션용 WOD 캐시 (저장 불필요)
 
 window._selectWod=function(wId){
   setState({lWodId:wId,lErr:''});
-};
-window._startSim=function(wId){
-  const tid=S.lTeacherId||S.user?.teacherId||'';
+};  const tid=S.lTeacherId||S.user?.teacherId||'';
   const wodList=getWodList(tid);
   const w=wodList.find(x=>x.id===wId);
   if(!w)return;
@@ -2757,19 +2719,7 @@ function buildRankOnly(){
 
 // ═══════════════════════════════════════════
 // 2학년 체력측정 모드
-// ═══════════════════════════════════════════
-const EXAM_COURSES = [
-  {name:'버피 브로드 점프', desc:'출발선에서 버피 브로드 점프로 골까지 이동', emoji:'💥'},
-  {name:'점프 스쿼트 10회', desc:'끝선에서 점프 스쿼트 10회 실시 (왕복의 시작점)', emoji:'🦵'},
-  {name:'왕복 달리기', desc:'출발선에서 반대편 달리기 후 점프 스쿼트 장소로 복귀', emoji:'🏃'},
-  {name:'모래주머니 2개 왕복', desc:'점프 스쿼트 장소에서 모래주머니 2개 들고 반대편 돌아 복귀', emoji:'🎒'},
-  {name:'워킹 런지', desc:'점프 스쿼트 장소에서 출발지점까지 워킹 런지로 이동 후 도착하면 코스 종료', emoji:'🚶'},
-];
-
-function examKey(){ return schoolKey('exam_records_2학년'); }
-function getExamRecords(){ return stor.get(examKey(),[]); }
-function setExamRecords(recs){ stor.set(examKey(),recs); }
-
+// ═══════════════════════════════════════════function getExamRecords(){ return stor.get(examKey(),[]); }
 // ── 성장 그래프 ──
 function buildGrowth(){
   const wrap=mkDiv('','');
