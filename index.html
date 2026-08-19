@@ -581,7 +581,7 @@ let S = {
   wPhase:'ready', wCountdown:10,
   // AMRAP
   aTimeLeft:0, aSets:0, aRunning:false, aDone:false,
-  aCheckLogs:[], aCooldown:0, aExCooldown:0, aLastExIdx:0,
+  aCheckLogs:[], aCooldown:0, aExCooldown:0, aLastExIdx:-1, aLastExReps:0,
   aChk1:false, aChk2:false, srDifficulty:'rx', srLastExIdx:-1,
   aCurExIdx:0, aExLog:[],
   // ForTime
@@ -803,7 +803,7 @@ function buildSchoolSelect(){
           const label=isTeam?`${r.class} ${r.team} (팀)`:`${r.class} ${r.name}`;
           const members=isTeam?(getMembers(r)||[]).join(' · '):'';
           const diffLabel=r.difficulty==='scaled'?'🔧':r.difficulty==='basic'?'⭐':'💪';
-          const score=r.wodType==='AMRAP'?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName:r.reps?'+'+r.reps+'회':''}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time||0);
+          const score=r.wodType==='AMRAP'?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName+(r.reps?' '+r.reps+'개':''):r.reps?'+'+r.reps+'개':''}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time||0);
           const rc=mkDiv('','display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)');
           rc.innerHTML=`<div style="flex:1">
             <div style="font-size:12px;font-weight:700">${label} ${diffLabel}</div>
@@ -1119,7 +1119,7 @@ function buildLogin(){
             const label=isTeam?`${r.class} ${r.team}`:`${r.class} ${r.name}`;
             const members=isTeam?(getMembers(r)||[]).join(' · '):'';
             const diffLabel=r.difficulty==='scaled'?'🔧':r.difficulty==='basic'?'⭐':'💪';
-            const score=r.wodType==='AMRAP'?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName:r.reps?'+'+r.reps+'회':''}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time||0);
+            const score=r.wodType==='AMRAP'?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName+(r.reps?' '+r.reps+'개':''):r.reps?'+'+r.reps+'개':''}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time||0);
             const rc=mkDiv('','display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)');
             rc.innerHTML=`<div style="flex:1">
               <div style="font-size:12px;font-weight:700">${label} ${diffLabel}</div>
@@ -1592,7 +1592,8 @@ function buildHome(){
   let topRec=null;
   if(wod.type==='AMRAP'&&clsRecs.length>0)topRec=clsRecs.reduce((a,b)=>{
     if((a.sets||0)!==(b.sets||0)) return (a.sets||0)>(b.sets||0)?a:b;
-    return (a.lastExIdx||0)>=(b.lastExIdx||0)?a:b;
+    if((a.lastExIdx||0)!==(b.lastExIdx||0)) return (a.lastExIdx||0)>(b.lastExIdx||0)?a:b;
+    return (a.reps||0)>=(b.reps||0)?a:b;
   });
   else if(wod.type==='EMOM'&&clsRecs.length>0)topRec=clsRecs.reduce((a,b)=>(a.sets||0)>=(b.sets||0)?a:b);
   else if(wod.type==='ForTime'&&clsRecs.length>0)topRec=clsRecs.reduce((a,b)=>a.time<b.time?a:b);
@@ -1825,8 +1826,8 @@ function buildAmrap(){
     // 마지막 운동 선택 (종료 후)
     const lastExCard=mkDiv('card','margin-bottom:12px;border:2px solid #ef444430');
     lastExCard.appendChild(mkDiv('','font-size:13px;font-weight:700;margin-bottom:4px','📍 마지막으로 하던 운동은?'));
-    lastExCard.appendChild(mkDiv('','font-size:11px;color:var(--muted);margin-bottom:10px','타이머 종료 시 진행 중이던 운동을 선택하세요'));
-    const exBtns=mkDiv('','display:flex;flex-direction:column;gap:5px');
+    lastExCard.appendChild(mkDiv('','font-size:11px;color:var(--muted);margin-bottom:10px','타이머 종료 시 진행 중이던 운동과 개수를 입력하세요'));
+    const exBtns=mkDiv('','display:flex;flex-direction:column;gap:5px;margin-bottom:10px');
     (wod2?.exercises||[]).forEach((ex,i)=>{
       const isOn=S.aLastExIdx===i;
       const btn=mkBtn(`chip ${isOn?'on':''}`,`text-align:left;padding:9px 12px;font-size:13px`,
@@ -1835,12 +1836,28 @@ function buildAmrap(){
       exBtns.appendChild(btn);
     });
     lastExCard.appendChild(exBtns);
+
+    // 개수 입력 (운동 선택 후)
     if(S.aLastExIdx>=0){
-      lastExCard.appendChild(mkDiv('','margin-top:8px;font-size:11px;text-align:center;color:var(--red);font-weight:700',
-        `📍 선택됨: ${S.aLastExIdx+1}. ${wod2?.exercises?.[S.aLastExIdx]||''}`));
+      const selEx=wod2?.exercises?.[S.aLastExIdx]||'';
+      const rxHint=(wod2?.exerciseRx||[])[S.aLastExIdx];
+      lastExCard.appendChild(mkDiv('','font-size:12px;font-weight:700;margin-bottom:5px',`✏️ ${S.aLastExIdx+1}. ${selEx} — 몇 개 했나요?`));
+      if(rxHint) lastExCard.appendChild(mkDiv('','font-size:10px;color:var(--muted);margin-bottom:5px',`💪RxD: ${rxHint}`));
+      const repRow=mkDiv('','display:flex;gap:8px;align-items:center');
+      const repInp=document.createElement('input');
+      repInp.type='number'; repInp.min='0'; repInp.max='999';
+      repInp.value=S.aLastExReps||0;
+      repInp.className='inp';
+      repInp.style.cssText='font-size:24px;font-weight:900;text-align:center;width:100px';
+      repInp.addEventListener('input',()=>{S.aLastExReps=Math.max(0,+repInp.value);});
+      repRow.appendChild(repInp);
+      repRow.appendChild(mkDiv('','font-size:14px;color:var(--muted)','개'));
+      lastExCard.appendChild(repRow);
+      lastExCard.appendChild(mkDiv('','margin-top:8px;font-size:12px;text-align:center;color:var(--red);font-weight:700;background:#ef444415;border-radius:8px;padding:6px',
+        `📍 ${S.aSets}세트 + ${S.aLastExIdx+1}. ${selEx} ${S.aLastExReps||0}개`));
     }
     wrap.appendChild(lastExCard);
-    wrap.appendChild(mkBtn('btn-p','','기록 저장하기 →',()=>{ clearInterval(workInt); setState({screen:'saveRecord',srSets:S.aSets,srReps:0,aChk1:false,aChk2:false,srDifficulty:'rx',srLastExIdx:S.aLastExIdx??-1}); }));
+    wrap.appendChild(mkBtn('btn-p','','기록 저장하기 →',()=>{ clearInterval(workInt); setState({screen:'saveRecord',srSets:S.aSets,srReps:S.aLastExReps||0,aChk1:false,aChk2:false,srDifficulty:'rx',srLastExIdx:S.aLastExIdx??-1}); }));
     return wrap;
   }
 
@@ -2427,7 +2444,7 @@ function buildRankOnly(){
       const label=isTeam?`${r.class} ${r.team} (팀)`:`${r.class} ${r.name}`;
       const members=isTeam?(getMembers(r)||[]).join(' · '):'';
       const diffLabel=r.difficulty==='scaled'?'🔧':r.difficulty==='basic'?'⭐':'💪';
-      const score=r.wodType==='AMRAP'?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName:r.reps?'+'+r.reps+'회':''}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time||0);
+      const score=r.wodType==='AMRAP'?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName+(r.reps?' '+r.reps+'개':''):r.reps?'+'+r.reps+'개':''}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time||0);
       rc.innerHTML=`
         <div style="flex:1">
           <div style="font-weight:700;font-size:13px">${label} ${diffLabel}</div>
@@ -2553,7 +2570,7 @@ function buildRankOnly(){
     else{if(r.time<map[key].time)map[key]=r;}
   });
   const data=Object.values(map);
-  if(wodType==='AMRAP')data.sort((a,b)=>b.sets-a.sets||b.reps-a.reps);
+  if(wodType==='AMRAP')data.sort((a,b)=>b.sets-a.sets||(b.lastExIdx||0)-(a.lastExIdx||0)||b.reps-a.reps);
   else if(wodType==='EMOM')data.sort((a,b)=>(b.sets||0)-(a.sets||0));
   else data.sort((a,b)=>a.time-b.time);
 
@@ -2571,7 +2588,7 @@ function buildRankOnly(){
         <div style="font-weight:700;font-size:14px">${name} <span style="font-size:11px">${diffLabel}</span></div>
         ${sub?`<div style="color:var(--muted);font-size:10px">${sub}</div>`:''}
       </div>
-      <div style="font-weight:900;font-size:16px;color:${wodType==='AMRAP'?'var(--accent)':wodType==='EMOM'?'var(--green)':'var(--blue)'}">${wodType==='AMRAP'?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName:r.reps?'+'+r.reps+'회':''}`:wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time)}</div>`;
+      <div style="font-weight:900;font-size:16px;color:${wodType==='AMRAP'?'var(--accent)':wodType==='EMOM'?'var(--green)':'var(--blue)'}">${wodType==='AMRAP'?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName+(r.reps?' '+r.reps+'개':''):r.reps?'+'+r.reps+'개':''}`:wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time)}</div>`;
     sc.appendChild(rc);
   });
 
@@ -3206,7 +3223,7 @@ function buildRank(){
       else{if(r.time<map[key].time)map[key]=r;}
     });
     const data=Object.values(map);
-    if(wodType==='AMRAP')data.sort((a,b)=>b.sets-a.sets||b.reps-a.reps||new Date(a.date)-new Date(b.date));
+    if(wodType==='AMRAP')data.sort((a,b)=>b.sets-a.sets||(b.lastExIdx||0)-(a.lastExIdx||0)||b.reps-a.reps||new Date(a.date)-new Date(b.date));
     else if(wodType==='EMOM')data.sort((a,b)=>(b.sets||0)-(a.sets||0)||new Date(a.date)-new Date(b.date));
     else data.sort((a,b)=>a.time-b.time||new Date(a.date)-new Date(b.date));
     if(data.length===0)return;
@@ -3229,7 +3246,7 @@ function buildRank(){
         </div>
         <div style="text-align:right;font-weight:700;font-size:15px;color:${wodType==='AMRAP'?'var(--accent)':wodType==='EMOM'?'var(--green)':'var(--blue)'}">
           ${wodType==='AMRAP'
-            ?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName:r.reps?'+'+r.reps+'회':''}`
+            ?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName+(r.reps?' '+r.reps+'개':''):r.reps?'+'+r.reps+'개':''}`
             :wodType==='EMOM'
             ?`${r.sets||0}R`
             :(r.time?fmtTime(r.time):'-')}
@@ -4023,7 +4040,7 @@ function buildAdminRecords(){
         <div style="font-size:10px;color:var(--muted)">${getMembers(r).join(', ')||''} · ${r.wodTitle||''}</div>
       </div>
       <div style="text-align:right">
-        <div style="font-size:14px;font-weight:900;color:${r.wodType==='AMRAP'?'var(--accent)':r.wodType==='EMOM'?'var(--green)':'var(--blue)'}">${r.wodType==='AMRAP'?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName:r.reps?'+'+r.reps+'회':''}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time)}</div>
+        <div style="font-size:14px;font-weight:900;color:${r.wodType==='AMRAP'?'var(--accent)':r.wodType==='EMOM'?'var(--green)':'var(--blue)'}">${r.wodType==='AMRAP'?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName+(r.reps?' '+r.reps+'개':''):r.reps?'+'+r.reps+'개':''}`:r.wodType==='EMOM'?`${r.sets||0}R`:fmtTime(r.time)}</div>
         <div style="font-size:10px;color:var(--muted);margin-top:1px">${r.difficulty==='scaled'?'🔧Scaled':r.difficulty==='basic'?'⭐Basic':'💪RxD'}</div>
         ${hasAbn?'<span style="color:var(--red);font-size:11px">⚠️</span>':''}
       </div>
