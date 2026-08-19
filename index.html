@@ -1822,7 +1822,25 @@ function buildAmrap(){
       wrap.appendChild(logCard);
     }
 
-    wrap.appendChild(mkBtn('btn-p','','기록 저장하기 →',()=>{ clearInterval(workInt); setState({screen:'saveRecord',srSets:S.aSets,srReps:0,aChk1:false,aChk2:false,srDifficulty:'rx',srLastExIdx:S.aLastExIdx||0}); }));
+    // 마지막 운동 선택 (종료 후)
+    const lastExCard=mkDiv('card','margin-bottom:12px;border:2px solid #ef444430');
+    lastExCard.appendChild(mkDiv('','font-size:13px;font-weight:700;margin-bottom:4px','📍 마지막으로 하던 운동은?'));
+    lastExCard.appendChild(mkDiv('','font-size:11px;color:var(--muted);margin-bottom:10px','타이머 종료 시 진행 중이던 운동을 선택하세요'));
+    const exBtns=mkDiv('','display:flex;flex-direction:column;gap:5px');
+    (wod2?.exercises||[]).forEach((ex,i)=>{
+      const isOn=S.aLastExIdx===i;
+      const btn=mkBtn(`chip ${isOn?'on':''}`,`text-align:left;padding:9px 12px;font-size:13px`,
+        `${i+1}. ${ex}`,()=>{S.aLastExIdx=i;S.srLastExIdx=i;render();});
+      if(isOn) btn.style.cssText+='background:#ef444420;border-color:var(--red);color:var(--red);font-weight:700';
+      exBtns.appendChild(btn);
+    });
+    lastExCard.appendChild(exBtns);
+    if(S.aLastExIdx>=0){
+      lastExCard.appendChild(mkDiv('','margin-top:8px;font-size:11px;text-align:center;color:var(--red);font-weight:700',
+        `📍 선택됨: ${S.aLastExIdx+1}. ${wod2?.exercises?.[S.aLastExIdx]||''}`));
+    }
+    wrap.appendChild(lastExCard);
+    wrap.appendChild(mkBtn('btn-p','','기록 저장하기 →',()=>{ clearInterval(workInt); setState({screen:'saveRecord',srSets:S.aSets,srReps:0,aChk1:false,aChk2:false,srDifficulty:'rx',srLastExIdx:S.aLastExIdx??-1}); }));
     return wrap;
   }
 
@@ -1854,28 +1872,14 @@ function buildAmrap(){
   const exList=mkDiv('card','margin-bottom:10px');
   exList.innerHTML=`<div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:8px">🏋️ 아래 운동을 순서대로 모두 완료하세요!</div>
     ${exercises.map((ex,i)=>`<div style="padding:7px 0;border-bottom:${i<exercises.length-1?'1px solid var(--border)':'none'}">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:700">${i+1}. ${ex}</div>
-          <div style="display:flex;gap:6px;margin-top:2px">
-            ${(wod.exerciseRx||[])[i]?`<span style="font-size:11px;color:var(--blue);font-weight:700">💪 RxD: ${(wod.exerciseRx||[])[i]}</span>`:''}
-            ${(wod.exerciseScale||[])[i]?`<span style="font-size:11px;color:var(--green);font-weight:700">🔧 Scaled: ${(wod.exerciseScale||[])[i]}</span>`:''}
-            ${(wod.exerciseBasic||[])[i]?`<span style="font-size:11px;color:var(--yellow);font-weight:700">⭐ Basic: ${(wod.exerciseBasic||[])[i]}</span>`:''}
-          </div>
-        </div>
-        <button onclick="window._setLastEx(${i})" style="background:${S.aLastExIdx===i?'var(--red)':'var(--card2)'};border:1px solid ${S.aLastExIdx===i?'var(--red)':'var(--border)'};border-radius:8px;padding:4px 8px;font-size:10px;color:${S.aLastExIdx===i?'#fff':'var(--muted)'};cursor:pointer;white-space:nowrap;flex-shrink:0">
-          ${S.aLastExIdx===i?'📍 여기서 멈춤':'📍 멈춤 표시'}
-        </button>
+      <div style="font-size:14px;font-weight:700">${i+1}. ${ex}</div>
+      <div style="display:flex;gap:6px;margin-top:2px">
+        ${(wod.exerciseRx||[])[i]?`<span style="font-size:11px;color:var(--blue);font-weight:700">💪 RxD: ${(wod.exerciseRx||[])[i]}</span>`:''}
+        ${(wod.exerciseScale||[])[i]?`<span style="font-size:11px;color:var(--green);font-weight:700">🔧 Scaled: ${(wod.exerciseScale||[])[i]}</span>`:''}
+        ${(wod.exerciseBasic||[])[i]?`<span style="font-size:11px;color:var(--yellow);font-weight:700">⭐ Basic: ${(wod.exerciseBasic||[])[i]}</span>`:''}
       </div>
     </div>`).join('')}`;
   wrap.appendChild(exList);
-
-  // 현재 마지막 운동 표시
-  if(S.aLastExIdx>=0&&S.aLastExIdx<exercises.length){
-    const lastExName=exercises[S.aLastExIdx];
-    wrap.appendChild(mkDiv('','background:#ef444415;border:1px solid #ef444440;border-radius:10px;padding:8px 12px;margin-bottom:8px;font-size:11px',
-      `📍 마지막 운동: <b style="color:var(--red)">${S.aLastExIdx+1}. ${lastExName}</b>`));
-  }
 
   // 세트 완료 버튼 (15초 쿨다운)
   const canCheck=S.aCooldown<=0&&S.aRunning;
