@@ -1506,9 +1506,46 @@ function buildAmrap(){
   const wrap=mkDiv('','min-height:100vh;display:flex;flex-direction:column;padding:13px;background:var(--bg)');
 
   if(S.aDone){
-    wrap.innerHTML=`<div class="tf" style="font-size:28px;color:var(--accent);text-align:center;margin-top:45px">운동 종료!</div>
-      <div style="font-size:64px;font-weight:900;text-align:center;margin:14px 0">${S.aSets}</div>
-      <div style="color:var(--muted);font-size:14px;text-align:center;margin-bottom:22px">완료 세트</div>`;
+    const logs=S.aCheckLogs||[];
+    const tl2=wod.timeLimit||(wod.timeLimitMin||10)*60+(wod.timeLimitSec||0);
+    wrap.innerHTML=`<div class="tf" style="font-size:28px;color:var(--accent);text-align:center;margin-top:24px;margin-bottom:6px">운동 종료!</div>`;
+
+    // 총 세트 수 크게
+    const scoreCard=mkDiv('card','text-align:center;margin-bottom:12px;border:2px solid var(--accent)30');
+    scoreCard.innerHTML=`<div style="font-size:56px;font-weight:900;color:var(--accent);line-height:1">${S.aSets}</div>
+      <div style="color:var(--muted);font-size:13px;margin-top:4px">완료 세트</div>`;
+    wrap.appendChild(scoreCard);
+
+    // 세트별 소요시간
+    if(logs.length>0){
+      const logCard=mkDiv('card','margin-bottom:12px');
+      logCard.appendChild(mkDiv('','font-size:12px;font-weight:700;margin-bottom:8px','⏱ 세트별 소요 시간'));
+      logs.forEach((l,i)=>{
+        const prevElapsed=i>0?logs[i-1].elapsed:0;
+        const setTime=l.elapsed-prevElapsed;
+        const row=mkDiv('','display:flex;align-items:center;gap:8px;padding:5px 0;'+(i<logs.length-1?'border-bottom:1px solid var(--border)':''));
+        row.innerHTML=`
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--asoft);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:var(--accent);flex-shrink:0">${l.set}</div>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:700;color:${l.abnormal?'var(--red)':'var(--text)'}">
+              소요: <span style="color:var(--blue)">${fmtTime(setTime)}</span>
+              <span style="font-size:10px;color:var(--muted);margin-left:6px">누적 ${fmtTime(l.elapsed)}</span>
+              ${l.abnormal?'<span style="color:var(--red);font-size:10px"> ⚠️ 빠른체크</span>':''}
+            </div>
+          </div>`;
+        logCard.appendChild(row);
+      });
+      // 평균
+      if(logs.length>0){
+        const avgSet=Math.round(logs.reduce((a,b,i)=>{
+          const prev=i>0?logs[i-1].elapsed:0;
+          return a+(b.elapsed-prev);
+        },0)/logs.length);
+        logCard.appendChild(mkDiv('','margin-top:8px;padding-top:8px;border-top:2px solid var(--border);text-align:center;font-size:12px;color:var(--muted)',`평균 세트 소요: <b style="color:var(--accent)">${fmtTime(avgSet)}</b>`));
+      }
+      wrap.appendChild(logCard);
+    }
+
     wrap.appendChild(mkBtn('btn-p','','기록 저장하기 →',()=>{ clearInterval(workInt); setState({screen:'saveRecord',srSets:S.aSets,srReps:0,aChk1:false,aChk2:false,srDifficulty:'rx'}); }));
     return wrap;
   }
@@ -3682,7 +3719,20 @@ function buildAdminRecords(){
     const detBtn=mkBtn('','background:none;border:none;color:var(--muted);font-size:9px;margin-top:2px',expanded?'▲ 접기':'▼ 상세',()=>setState({adminExpandRecord:expanded?null:r.id}));
     rc.appendChild(detBtn);
     if(expanded){
-      if(r.checkLogs&&r.checkLogs.length>0){rc.innerHTML+=`<div style="margin-top:4px;background:var(--bg);border-radius:6px;padding:5px 7px;font-size:9px"><div style="font-weight:700;margin-bottom:2px">세트 로그</div>${r.checkLogs.map(l=>`<div style="color:${l.abnormal?'var(--red)':'var(--muted)'}">Set ${l.set} · ${fmtTime(l.elapsed)}${l.abnormal?' ⚠️':''}</div>`).join('')}</div>`;}
+      if(r.checkLogs&&r.checkLogs.length>0){
+        rc.innerHTML+=`<div style="margin-top:6px;background:var(--bg);border-radius:8px;padding:6px 8px;font-size:10px">
+          <div style="font-weight:700;margin-bottom:4px">⏱ 세트별 소요시간</div>
+          ${r.checkLogs.map((l,i,arr)=>{
+            const prev=i>0?arr[i-1].elapsed:0;
+            const t=l.elapsed-prev;
+            return `<div style="display:flex;justify-content:space-between;color:${l.abnormal?'var(--red)':'var(--muted)'}">
+              <span>Set ${l.set}</span>
+              <span style="color:var(--blue);font-weight:700">${fmtTime(t)}</span>
+              <span>누적 ${fmtTime(l.elapsed)}${l.abnormal?' ⚠️':''}</span>
+            </div>`;
+          }).join('')}
+        </div>`;
+      }
       if(r.forTimeSetLogs&&r.forTimeSetLogs.length>0){rc.innerHTML+=`<div style="margin-top:4px;background:var(--bg);border-radius:6px;padding:5px 7px;font-size:9px"><div style="font-weight:700;margin-bottom:2px">세트 로그</div>${r.forTimeSetLogs.map(l=>`<div style="color:var(--muted)">Set ${l.set} · ${fmtTime(l.elapsed)}</div>`).join('')}</div>`;}
       rc.appendChild(mkBtn('btn-d','font-size:10px;padding:6px;margin-top:6px','기록 삭제',()=>{
         fbDeleteRecord(r.id);
