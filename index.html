@@ -1308,14 +1308,13 @@ function buildLogin(){
                   ${r.difficulty==='scaled'?'<span style="font-size:9px;color:var(--green)">🔧Scaled</span>':r.difficulty==='basic'?'<span style="font-size:9px;color:var(--yellow)">⭐Basic</span>':'<span style="font-size:9px;color:var(--blue)">💪RxD</span>'}
                 </div>
                 <div style="font-weight:900;font-size:16px;color:var(--blue)">${fmtTime(r.time||0)}</div>`;
-                // 세트별 시간
                 if(r.fSetLogs&&r.fSetLogs.length>0){
-                  const logDiv=mkDiv('','margin-top:4px;background:var(--bg);border-radius:6px;padding:5px 7px;font-size:9px;color:var(--muted)');
-                  logDiv.innerHTML=r.fSetLogs.map((l,i,arr)=>{
-                    const prev=i>0?arr[i-1].elapsed:0;
-                    return `Set${l.set}: ${fmtTime(l.elapsed-prev)}`;
+                  const logDiv2=mkDiv('','margin-top:4px;background:var(--bg);border-radius:6px;padding:5px 7px;font-size:9px;color:var(--muted)');
+                  logDiv2.textContent=r.fSetLogs.map((l,idx3,arr3)=>{
+                    const prev3=idx3>0?arr3[idx3-1].elapsed:0;
+                    return `Set${l.set}: ${fmtTime(l.elapsed-prev3)}`;
                   }).join(' · ');
-                  row.appendChild(logDiv);
+                  row.appendChild(logDiv2);
                 }
                 detDiv.appendChild(row);
               });
@@ -1389,8 +1388,56 @@ function buildLogin(){
               </div>`;
           } else {
             const times=wRecs.map(r=>r.time||0).filter(t=>t>0);
-
-    } else if(S.lStep===2){
+            if(!times.length){ wrap.appendChild(card); return; }
+            const minT=Math.min(...times);
+            const maxT=Math.max(...times);
+            const avgT=Math.round(times.reduce((a,b)=>a+b,0)/times.length);
+            const trend=wRecs.length>1?(wRecs[0].time||0)-(wRecs[wRecs.length-1].time||0):0;
+            card.innerHTML=`
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <div><div style="font-weight:700;font-size:13px">${wodTitle}</div><span class="badge bb" style="font-size:9px">ForTime</span><span style="font-size:10px;color:var(--muted);margin-left:4px">${wRecs.length}회 참여</span></div>
+                <div style="text-align:right">
+                  <div style="font-size:18px;font-weight:900;color:var(--blue)">${fmtTime(minT)}</div>
+                  <div style="font-size:10px;font-weight:700;color:${trend>0?'var(--green)':trend<0?'var(--red)':'var(--muted)'}">${trend>0?'↓'+fmtTime(trend)+' 단축':trend<0?'↑'+fmtTime(Math.abs(trend))+' 증가':'→ 유지'}</div>
+                </div>
+              </div>
+              <div style="display:flex;gap:3px;align-items:flex-end;height:56px;margin-bottom:6px">
+                ${wRecs.slice(-10).map((r,i,arr)=>{
+                  const prev=i>0?arr[i-1].time||0:null;
+                  const cur=r.time||0;
+                  const color=prev===null?'var(--blue)':cur<prev?'var(--green)':cur>prev?'var(--red)':'var(--blue)';
+                  const h=maxT>0?((maxT-cur)/Math.max(maxT-minT,1))*42+8:8;
+                  return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
+                    <div style="font-size:7px;color:${color};font-weight:700">${fmtTime(cur)}</div>
+                    <div style="width:100%;border-radius:2px 2px 0 0;background:${color};height:${h}px;min-height:3px"></div>
+                    <div style="font-size:6px;color:var(--muted)">${fmtDate(r.date)}</div>
+                  </div>`;
+                }).join('')}
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:6px">
+                <div style="background:var(--card2);border-radius:7px;padding:5px;text-align:center"><div style="font-size:12px;font-weight:900;color:var(--blue)">${fmtTime(minT)}</div><div style="font-size:8px;color:var(--muted)">최고</div></div>
+                <div style="background:var(--card2);border-radius:7px;padding:5px;text-align:center"><div style="font-size:12px;font-weight:900;color:var(--muted)">${fmtTime(avgT)}</div><div style="font-size:8px;color:var(--muted)">평균</div></div>
+                <div style="background:var(--card2);border-radius:7px;padding:5px;text-align:center"><div style="font-size:12px;font-weight:900;color:var(--muted)">${times.length}회</div><div style="font-size:8px;color:var(--muted)">참여</div></div>
+              </div>`;
+            const detBtnFt=mkBtn('','width:100%;background:none;border:1px solid var(--border);border-radius:8px;padding:6px;font-size:11px;color:var(--muted)',isExpanded?'▲ 접기':'▼ 상세보기',()=>{S.homeSearchExpand=isExpanded?null:wodTitle;render();});
+            card.appendChild(detBtnFt);
+            if(isExpanded){
+              const detDivFt=mkDiv('','margin-top:8px;border-top:1px solid var(--border);padding-top:8px');
+              wRecs.forEach(r=>{
+                const rowFt=mkDiv('','padding:6px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px');
+                rowFt.innerHTML=`<div style="flex:1">
+                  <div style="font-size:11px;font-weight:700">${fmtFull(r.date)} · ${r.class}</div>
+                  ${r.mode==='team'?`<div style="font-size:10px;color:var(--muted)">${r.team}</div>`:''}
+                  ${r.difficulty==='scaled'?'<span style="font-size:9px;color:var(--green)">🔧Scaled</span>':r.difficulty==='basic'?'<span style="font-size:9px;color:var(--yellow)">⭐Basic</span>':'<span style="font-size:9px;color:var(--blue)">💪RxD</span>'}
+                </div>
+                <div style="font-weight:900;font-size:16px;color:var(--blue)">${fmtTime(r.time||0)}</div>`;
+                detDivFt.appendChild(rowFt);
+              });
+              card.appendChild(detDivFt);
+            }
+          }
+          wrap.appendChild(card);
+        });
       // Step2: WOD 선택
       const teacher=findTeacher(S.lTeacherId);
       const tid=S.lTeacherId;
