@@ -2453,18 +2453,21 @@ function buildRankOnly(){
 
   // ── 전교 순위 ──
   if(S.rankOnlyScope==='school'){
-    // 모든 선생님 기록 합산 (각 선생님별 localStorage 키에서)
-    const sid=S.selectedSchoolId||'wolchon';
-    const teachers=getTeachers();
+    // localStorage의 모든 wod_records 키에서 기록 합산
     const allRecs=[];
     const seen=new Set();
-    // 공통 wod_records 키
-    stor.get(sid+'_wod_records',[]).forEach(r=>{
-      if(!seen.has(r.id)){seen.add(r.id);allRecs.push(r);}
+    Object.keys(localStorage).filter(k=>k.includes('wod_records')).forEach(key=>{
+      try{
+        const recs=JSON.parse(localStorage.getItem(key)||'[]');
+        recs.forEach(r=>{
+          const k=r.id||JSON.stringify({n:r.name,d:r.date,s:r.sets,t:r.time});
+          if(!seen.has(k)){seen.add(k);allRecs.push(r);}
+        });
+      }catch(e){}
     });
     // S.records도 합산
     S.records.forEach(r=>{
-      const k=r.id||JSON.stringify(r);
+      const k=r.id||JSON.stringify({n:r.name,d:r.date,s:r.sets,t:r.time});
       if(!seen.has(k)){seen.add(k);allRecs.push(r);}
     });
     const wodGroups={};
