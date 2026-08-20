@@ -525,15 +525,6 @@ let _simWodCache = null; // 시뮬레이션용 WOD 캐시 (저장 불필요)
 
 window._selectWod=function(wId){
   setState({lWodId:wId,lErr:''});
-};  const tid=S.lTeacherId||S.user?.teacherId||'';
-  const wodList=getWodList(tid);
-  const w=wodList.find(x=>x.id===wId);
-  if(!w)return;
-  _simWodCache=w;
-  S.adminWodSimId=wId;
-  S.simData=null;S.simSlide=0;S.simPlaying=false;S.simFromStudent=true;
-  S.screen='wodSim';
-  render();
 };
 let S = {
   screen: 'schoolSelect', tab:'home', user:null,
