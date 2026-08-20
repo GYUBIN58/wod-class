@@ -559,7 +559,7 @@ let S = {
   // saveRecord
   srSets:0, srReps:0, srTimeMin:0, srTimeSec:0,
   // rank
-  rankView:'class', rankOnlyTeacherId:'', rankOnlyCls:'전체', rankOnlyDiff:'all', rankOnlySearch:'', rankOnlyScope:'teacher', rankOnlyDate:'', rankOnlyDateMode:'day', rankDiff:'all', growthDiff:'all',
+  rankView:'class', rankOnlyTeacherId:'', rankOnlyCls:'전체', rankOnlyDiff:'all', rankOnlySearch:'', rankOnlyScope:'teacher', rankOnlyDate:'', rankOnlyDateMode:'day', rankDiff:'all', growthDiff:'all', schoolRankWodIdx:0,
   // myRecord
   mrSearch:'',
   // admin
@@ -2464,62 +2464,81 @@ function buildRankOnly(){
       sc.appendChild(mkDiv('card','text-align:center;color:var(--muted);padding:30px','기록이 없습니다 🏋️'));
       wrap.appendChild(sc); return wrap;
     }
-    Object.entries(wodGroups).forEach(([key,{title,type,recs}])=>{
-      if(recs.length===0) return;
-      const card=mkDiv('card','margin-bottom:12px');
-      const titleRow=mkDiv('','display:flex;align-items:center;gap:6px;margin-bottom:8px');
-      titleRow.innerHTML=`<div style="font-weight:700;font-size:14px">${title}</div><span class="badge ${type==='AMRAP'?'bo':type==='EMOM'?'bg':'bb'}">${type}</span><span style="font-size:10px;color:var(--muted)">· ${recs.length}명</span>`;
-      if(key.startsWith('WOD-')) titleRow.innerHTML+=`<span style="font-size:9px;color:var(--muted);margin-left:auto">${key}</span>`;
-      card.appendChild(titleRow);
-      // 난이도 탭
-      const diffTab=mkDiv('','display:flex;gap:4px;margin-bottom:8px');
-      const diffKey='school_diff_'+key;
-      const curDiff=S[diffKey]||'all';
-      [['all','전체'],['rx','💪'],['scaled','🔧'],['basic','⭐']].forEach(([v,l])=>{
-        const cnt=v==='all'?recs.length:recs.filter(r=>(r.difficulty||'rx')===v).length;
-        if(cnt===0&&v!=='all') return;
-        diffTab.appendChild(mkBtn(`chip ${curDiff===v?'on':''}`,`font-size:10px;padding:4px 8px`,`${l}(${cnt})`,()=>{S[diffKey]=v;render();}));
-      });
-      card.appendChild(diffTab);
-      let filtered=(curDiff==='all'?recs:recs.filter(r=>(r.difficulty||'rx')===curDiff)).slice();
-      // 같은 사람/팀의 최고기록만 추출
-      const bestMap={};
-      filtered.forEach(r=>{
-        const k=r.mode==='team'?`t_${r.class}_${r.team}`:`i_${r.class}_${r.name}`;
-        if(!bestMap[k]){ bestMap[k]=r; return; }
-        const cur=bestMap[k];
-        if(type==='AMRAP'){
-          if(r.sets>cur.sets||(r.sets===cur.sets&&(r.lastExIdx||0)>(cur.lastExIdx||0))) bestMap[k]=r;
-        } else if(type==='EMOM'){
-          if((r.sets||0)>(cur.sets||0)) bestMap[k]=r;
-        } else {
-          if((r.time||0)<(cur.time||0)) bestMap[k]=r;
-        }
-      });
-      let sorted=Object.values(bestMap);
-      if(type==='AMRAP') sorted.sort((a,b)=>b.sets-a.sets||(b.lastExIdx||0)-(a.lastExIdx||0)||b.reps-a.reps);
-      else if(type==='EMOM') sorted.sort((a,b)=>(b.sets||0)-(a.sets||0));
-      else sorted.sort((a,b)=>(a.time||0)-(b.time||0));
-      const medals=['🥇','🥈','🥉'];
-      sorted.slice(0,20).forEach((r,i)=>{
-        const isTeam=r.mode==='team';
-        const name=isTeam?`${r.class} ${r.team}`:`${r.class} ${r.name}`;
-        const members=isTeam?(getMembers(r)||[]).join('·'):'';
-        const diffLabel=r.difficulty==='scaled'?'🔧':r.difficulty==='basic'?'⭐':'💪';
-        const score=type==='AMRAP'?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName+(r.reps?' '+r.reps+'개':''):r.reps?'+'+r.reps+'개':''}`:type==='EMOM'?`${r.sets||0}R`:fmtTime(r.time||0);
-        const teacherName=findTeacher(r.teacherId)?.name||'';
-        const rc=mkDiv('','display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)');
-        rc.innerHTML=`<div style="font-size:${i<3?20:13}px;min-width:28px;text-align:center">${medals[i]||(i+1)+'위'}</div>
-          <div style="flex:1">
-            <div style="font-weight:700;font-size:13px">${name} ${diffLabel}</div>
-            ${members?`<div style="font-size:10px;color:var(--muted)">${members}</div>`:''}
-            <div style="font-size:10px;color:var(--muted)">${teacherName} 선생님반 · ${fmtDate(r.date)}</div>
-          </div>
-          <div style="font-weight:900;font-size:15px;color:${type==='AMRAP'?'var(--accent)':type==='EMOM'?'var(--green)':'var(--blue)'}">${score}</div>`;
-        card.appendChild(rc);
-      });
-      sc.appendChild(card);
+    // WOD 탭 (가로 스와이프)
+    const wodKeys=Object.keys(wodGroups);
+    if(!S.schoolRankWodIdx||S.schoolRankWodIdx>=wodKeys.length) S.schoolRankWodIdx=0;
+    const curKey=wodKeys[S.schoolRankWodIdx];
+    const {title,type,recs}=wodGroups[curKey];
+
+    // WOD 탭 선택
+    const wodTabRow=mkDiv('','display:flex;gap:4px;margin-bottom:12px;overflow-x:auto;padding-bottom:4px');
+    wodKeys.forEach((k,idx)=>{
+      const {title:t,type:tp}=wodGroups[k];
+      const isOn=idx===S.schoolRankWodIdx;
+      const btn=mkBtn(`chip ${isOn?'on':''}`,`white-space:nowrap;font-size:11px;padding:6px 10px;flex-shrink:0`,
+        `${t}`,()=>{S.schoolRankWodIdx=idx;render();});
+      wodTabRow.appendChild(btn);
     });
+    sc.appendChild(wodTabRow);
+
+    // WOD 카드 (화면 꽉 채움)
+    const card=mkDiv('','background:var(--card);border-radius:20px;border:1px solid var(--border);padding:14px;min-height:calc(100vh - 280px)');
+
+    // 헤더
+    const titleRow=mkDiv('','display:flex;align-items:center;gap:6px;margin-bottom:10px');
+    titleRow.innerHTML=`<div style="font-weight:700;font-size:15px">${title}</div><span class="badge ${type==='AMRAP'?'bo':type==='EMOM'?'bg':'bb'}">${type}</span>`;
+    card.appendChild(titleRow);
+
+    // 난이도 탭
+    const diffTab=mkDiv('','display:flex;gap:4px;margin-bottom:10px');
+    const diffKey='school_diff_'+curKey;
+    const curDiff=S[diffKey]||'all';
+    [['all','전체'],['rx','💪'],['scaled','🔧'],['basic','⭐']].forEach(([v,l])=>{
+      const cnt=v==='all'?recs.length:recs.filter(r=>(r.difficulty||'rx')===v).length;
+      if(cnt===0&&v!=='all') return;
+      diffTab.appendChild(mkBtn(`chip ${curDiff===v?'on':''}`,`font-size:10px;padding:4px 8px`,`${l}(${cnt})`,()=>{S[diffKey]=v;render();}));
+    });
+    card.appendChild(diffTab);
+
+    let filtered=(curDiff==='all'?recs:recs.filter(r=>(r.difficulty||'rx')===curDiff)).slice();
+    // 최고기록만
+    const bestMap={};
+    filtered.forEach(r=>{
+      const k=r.mode==='team'?`t_${r.class}_${r.team}`:`i_${r.class}_${r.name}`;
+      if(!bestMap[k]){ bestMap[k]=r; return; }
+      const cur=bestMap[k];
+      if(type==='AMRAP'){ if(r.sets>cur.sets||(r.sets===cur.sets&&(r.lastExIdx||0)>(cur.lastExIdx||0))) bestMap[k]=r; }
+      else if(type==='EMOM'){ if((r.sets||0)>(cur.sets||0)) bestMap[k]=r; }
+      else { if((r.time||0)<(cur.time||0)) bestMap[k]=r; }
+    });
+    let sorted=Object.values(bestMap);
+    if(type==='AMRAP') sorted.sort((a,b)=>b.sets-a.sets||(b.lastExIdx||0)-(a.lastExIdx||0)||b.reps-a.reps);
+    else if(type==='EMOM') sorted.sort((a,b)=>(b.sets||0)-(a.sets||0));
+    else sorted.sort((a,b)=>(a.time||0)-(b.time||0));
+
+    const medals=['🥇','🥈','🥉'];
+    if(sorted.length===0){
+      card.appendChild(mkDiv('','text-align:center;color:var(--muted);padding:40px','기록이 없습니다'));
+    }
+    sorted.forEach((r,i)=>{
+      const isTeam=r.mode==='team';
+      const name=isTeam?`${r.class} ${r.team}`:`${r.class} ${r.name}`;
+      const members=isTeam?(getMembers(r)||[]).join(' · '):'';
+      const diffLabel=r.difficulty==='scaled'?'🔧':r.difficulty==='basic'?'⭐':'💪';
+      const score=type==='AMRAP'?`${r.sets||0}S ${r.lastExIdx>=0&&r.lastExName?'📍'+r.lastExName+(r.reps?' '+r.reps+'개':''):r.reps?'+'+r.reps+'개':''}`:type==='EMOM'?`${r.sets||0}R`:fmtTime(r.time||0);
+      const teacherName=findTeacher(r.teacherId)?.name||'';
+      const rc=mkDiv('','display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)');
+      rc.innerHTML=`
+        <div style="font-size:${i<3?24:14}px;min-width:36px;text-align:center">${medals[i]||(i+1)+'위'}</div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:14px">${name} ${diffLabel}</div>
+          ${members?`<div style="font-size:11px;color:var(--muted)">${members}</div>`:''}
+          <div style="font-size:10px;color:var(--muted)">${teacherName} 선생님반 · ${fmtDate(r.date)}</div>
+        </div>
+        <div style="font-weight:900;font-size:18px;color:${type==='AMRAP'?'var(--accent)':type==='EMOM'?'var(--green)':'var(--blue)'}">${score}</div>`;
+      card.appendChild(rc);
+    });
+    sc.appendChild(card);
     wrap.appendChild(sc); return wrap;
   }
 
