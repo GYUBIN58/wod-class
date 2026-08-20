@@ -2453,7 +2453,10 @@ function buildRankOnly(){
 
   // ── 전교 순위 ──
   if(S.rankOnlyScope==='school'){
-    const allRecs=S.records;
+    // localStorage에서 직접 전체 기록 로드 (선생님 선택 불필요)
+    const sid=S.selectedSchoolId||'wolchon';
+    const allRecs=stor.get(sid+'_wod_records',[]);
+    console.log('전교순위 기록수:', allRecs.length);
     const wodGroups={};
     allRecs.forEach(r=>{
       const key=r.shareCode||r.wodTitle||'기타';
