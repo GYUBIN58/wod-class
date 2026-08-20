@@ -2453,10 +2453,20 @@ function buildRankOnly(){
 
   // ── 전교 순위 ──
   if(S.rankOnlyScope==='school'){
-    // localStorage에서 직접 전체 기록 로드 (선생님 선택 불필요)
+    // 모든 선생님 기록 합산 (각 선생님별 localStorage 키에서)
     const sid=S.selectedSchoolId||'wolchon';
-    const allRecs=stor.get(sid+'_wod_records',[]);
-    console.log('전교순위 기록수:', allRecs.length);
+    const teachers=getTeachers();
+    const allRecs=[];
+    const seen=new Set();
+    // 공통 wod_records 키
+    stor.get(sid+'_wod_records',[]).forEach(r=>{
+      if(!seen.has(r.id)){seen.add(r.id);allRecs.push(r);}
+    });
+    // S.records도 합산
+    S.records.forEach(r=>{
+      const k=r.id||JSON.stringify(r);
+      if(!seen.has(k)){seen.add(k);allRecs.push(r);}
+    });
     const wodGroups={};
     allRecs.forEach(r=>{
       const key=r.shareCode||r.wodTitle||'기타';
