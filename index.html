@@ -2453,17 +2453,7 @@ function buildRankOnly(){
 
   // ── 전교 순위 ──
   if(S.rankOnlyScope==='school'){
-    // Firebase에서 동기화된 전체 기록 사용
-    const sid=S.selectedSchoolId||'wolchon';
-    // localStorage의 모든 키에서 wod_records 합산
-    const allRecs=[];
-    const seen=new Set();
-    // S.records + localStorage 전체 기록 합산
-    const localRecs=stor.get(sid+'_wod_records',[]);
-    [...S.records,...localRecs].forEach(r=>{
-      if(r&&r.id&&!seen.has(r.id)){seen.add(r.id);allRecs.push(r);}
-      else if(r&&!r.id) allRecs.push(r);
-    });
+    const allRecs=S.records;
     const wodGroups={};
     allRecs.forEach(r=>{
       const key=r.shareCode||r.wodTitle||'기타';
