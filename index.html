@@ -2453,9 +2453,9 @@ function buildRankOnly(){
 
   // ── 전교 순위 ──
   if(S.rankOnlyScope==='school'){
-    // 학교 전체 기록 (localStorage에서 직접)
+    // 학교 전체 기록 - S.records 우선, 없으면 localStorage
     const sid=S.selectedSchoolId||'wolchon';
-    const allRecs=stor.get(sid+'_wod_records',[]);
+    const allRecs=S.records.length>0 ? S.records : stor.get(sid+'_wod_records',[]);
     const wodGroups={};
     allRecs.forEach(r=>{
       const key=r.shareCode||r.wodTitle||'기타';
@@ -2520,7 +2520,7 @@ function buildRankOnly(){
 
     const medals=['🥇','🥈','🥉'];
     if(sorted.length===0){
-      card.appendChild(mkDiv('','text-align:center;color:var(--muted);padding:40px','기록이 없습니다'));
+      card.appendChild(mkDiv('','text-align:center;color:var(--muted);padding:40px;font-size:14px','이 WOD의 기록이 없습니다 🏋️'));
     }
     sorted.forEach((r,i)=>{
       const isTeam=r.mode==='team';
