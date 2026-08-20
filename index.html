@@ -2453,7 +2453,7 @@ function buildRankOnly(){
 
   // ── 전교 순위 ──
   if(S.rankOnlyScope==='school'){
-    const allRecs=S.records.filter(r=>r.date.slice(0,10)===today);
+    const allRecs=S.records; // 날짜 무관 전체 기록
     const wodGroups={};
     allRecs.forEach(r=>{
       const key=r.shareCode||r.wodTitle||'기타';
@@ -2461,7 +2461,7 @@ function buildRankOnly(){
       wodGroups[key].recs.push(r);
     });
     if(Object.keys(wodGroups).length===0){
-      sc.appendChild(mkDiv('card','text-align:center;color:var(--muted);padding:30px','오늘 기록이 없습니다 🏋️'));
+      sc.appendChild(mkDiv('card','text-align:center;color:var(--muted);padding:30px','기록이 없습니다 🏋️'));
       wrap.appendChild(sc); return wrap;
     }
     Object.entries(wodGroups).forEach(([key,{title,type,recs}])=>{
@@ -2481,7 +2481,22 @@ function buildRankOnly(){
         diffTab.appendChild(mkBtn(`chip ${curDiff===v?'on':''}`,`font-size:10px;padding:4px 8px`,`${l}(${cnt})`,()=>{S[diffKey]=v;render();}));
       });
       card.appendChild(diffTab);
-      let sorted=(curDiff==='all'?recs:recs.filter(r=>(r.difficulty||'rx')===curDiff)).slice();
+      let filtered=(curDiff==='all'?recs:recs.filter(r=>(r.difficulty||'rx')===curDiff)).slice();
+      // 같은 사람/팀의 최고기록만 추출
+      const bestMap={};
+      filtered.forEach(r=>{
+        const k=r.mode==='team'?`t_${r.class}_${r.team}`:`i_${r.class}_${r.name}`;
+        if(!bestMap[k]){ bestMap[k]=r; return; }
+        const cur=bestMap[k];
+        if(type==='AMRAP'){
+          if(r.sets>cur.sets||(r.sets===cur.sets&&(r.lastExIdx||0)>(cur.lastExIdx||0))) bestMap[k]=r;
+        } else if(type==='EMOM'){
+          if((r.sets||0)>(cur.sets||0)) bestMap[k]=r;
+        } else {
+          if((r.time||0)<(cur.time||0)) bestMap[k]=r;
+        }
+      });
+      let sorted=Object.values(bestMap);
       if(type==='AMRAP') sorted.sort((a,b)=>b.sets-a.sets||(b.lastExIdx||0)-(a.lastExIdx||0)||b.reps-a.reps);
       else if(type==='EMOM') sorted.sort((a,b)=>(b.sets||0)-(a.sets||0));
       else sorted.sort((a,b)=>(a.time||0)-(b.time||0));
@@ -2498,7 +2513,7 @@ function buildRankOnly(){
           <div style="flex:1">
             <div style="font-weight:700;font-size:13px">${name} ${diffLabel}</div>
             ${members?`<div style="font-size:10px;color:var(--muted)">${members}</div>`:''}
-            <div style="font-size:10px;color:var(--muted)">${teacherName} 선생님반</div>
+            <div style="font-size:10px;color:var(--muted)">${teacherName} 선생님반 · ${fmtDate(r.date)}</div>
           </div>
           <div style="font-weight:900;font-size:15px;color:${type==='AMRAP'?'var(--accent)':type==='EMOM'?'var(--green)':'var(--blue)'}">${score}</div>`;
         card.appendChild(rc);
